@@ -199,7 +199,8 @@ async function aircraft(lat, lng) {
       const list = j.ac || j.aircraft || [];
       const ac = list.filter(a => a.lat != null && a.lon != null).slice(0, 400).map(a => ({
         hex: a.hex, flight: (a.flight || '').trim() || a.r || a.hex, type: a.t || '', lat: a.lat, lng: a.lon,
-        alt: typeof a.alt_baro === 'number' ? a.alt_baro : 0, ground: a.alt_baro === 'ground', gs: a.gs ?? null, track: a.track ?? null
+        alt: typeof a.alt_baro === 'number' ? a.alt_baro : 0, ground: a.alt_baro === 'ground', gs: a.gs ?? null, track: a.track ?? null,
+        squawk: a.squawk || null, emergency: a.emergency && a.emergency !== 'none' ? a.emergency : null, reg: a.r || null, desc: a.desc || null
       }));
       status.aircraft = 'ok';
       if (acLastGood !== prov.name) log(`aircraft: using ${prov.name}`);
