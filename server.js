@@ -2,7 +2,7 @@
 // Pulls live public feeds, keeps them in memory, and pushes new events to the browser (Server-Sent Events).
 //   USGS        : M4.5+ earthquakes worldwide (every 60 s)
 //   P2PQuake    : Japan Meteorological Agency quake reports, Earthquake Early Warnings, tsunami notices (every 15 s)
-//   adsb.lol    : live aircraft around a point (on request)
+//   ADS-B       : live aircraft around a point (airplanes.live / adsb.fi / adsb.lol, on request)
 //   Windy       : live webcams around a point (on request, needs WINDY_API_KEY)
 //   Claude      : AI situation briefing (on request, needs ANTHROPIC_API_KEY)
 // Run:  node server.js        (live)
@@ -165,26 +165,41 @@ function demoEEW() {
 
 // ---------- aircraft ----------
 const acCache = new Map();
+// Free ADS-B aggregators that share the readsb "v2" JSON shape. Tried in order; the last one that worked goes first next time.
+const AC_PROVIDERS = [
+  { name: 'airplanes.live', url: (la, lo) => `https://api.airplanes.live/v2/point/${la}/${lo}/250` },
+  { name: 'adsb.fi', url: (la, lo) => `https://opendata.adsb.fi/api/v2/lat/${la}/lon/${lo}/dist/250` },
+  { name: 'adsb.lol', url: (la, lo) => `https://api.adsb.lol/v2/point/${la}/${lo}/250` }
+];
+let acLastGood = null;
 async function aircraft(lat, lng) {
   if (DEMO) return { demo: true, ac: [] };
   const key = `${lat.toFixed(1)},${lng.toFixed(1)}`;
   const hit = acCache.get(key);
   if (hit && Date.now() - hit.t < 20000) return hit.v;
-  try {
-    const j = await getJSON(`https://api.adsb.lol/v2/point/${lat.toFixed(3)}/${lng.toFixed(3)}/250`);
-    const ac = (j.ac || []).filter(a => a.lat != null && a.lon != null).slice(0, 400).map(a => ({
-      hex: a.hex, flight: (a.flight || '').trim() || a.r || a.hex, type: a.t || '', lat: a.lat, lng: a.lon,
-      alt: typeof a.alt_baro === 'number' ? a.alt_baro : 0, ground: a.alt_baro === 'ground', gs: a.gs ?? null, track: a.track ?? null
-    }));
-    status.aircraft = 'ok';
-    const v = { ac };
-    acCache.set(key, { t: Date.now(), v });
-    return v;
-  } catch (e) {
-    status.aircraft = 'error';
-    log('adsb.lol error:', e.message);
-    return { error: '항공기 데이터를 가져오지 못했어요', ac: [] };
+  const order = [...AC_PROVIDERS].sort((a, b) => (b.name === acLastGood) - (a.name === acLastGood));
+  const errors = [];
+  for (const prov of order) {
+    try {
+      const j = await getJSON(prov.url(lat.toFixed(3), lng.toFixed(3)), {}, 10000);
+      const list = j.ac || j.aircraft || [];
+      const ac = list.filter(a => a.lat != null && a.lon != null).slice(0, 400).map(a => ({
+        hex: a.hex, flight: (a.flight || '').trim() || a.r || a.hex, type: a.t || '', lat: a.lat, lng: a.lon,
+        alt: typeof a.alt_baro === 'number' ? a.alt_baro : 0, ground: a.alt_baro === 'ground', gs: a.gs ?? null, track: a.track ?? null
+      }));
+      status.aircraft = 'ok';
+      if (acLastGood !== prov.name) log(`aircraft: using ${prov.name}`);
+      acLastGood = prov.name;
+      const v = { ac, source: prov.name };
+      acCache.set(key, { t: Date.now(), v });
+      return v;
+    } catch (e) {
+      errors.push(`${prov.name}: ${e.message}`);
+    }
   }
+  status.aircraft = 'error';
+  log('aircraft error:', errors.join(' | '));
+  return { error: '항공기 데이터를 가져오지 못했어요 (' + errors.join(', ') + ')', ac: [] };
 }
 
 // ---------- webcams ----------

@@ -846,7 +846,7 @@ async function loadAircraft(e) {
     if (j.demo) { box.innerHTML = ''; return; }
     if (j.error) { box.innerHTML = `<div class="sec" style="animation-delay:0s"><div class="sec-h"><span>주변 항공기</span></div><p class="note">${esc(j.error)}</p></div>`; return; }
     const airborne = acPoints.filter(a => !a.ground).map(a => ({ ...a, d: distKm(e.lat, e.lng, a.lat, a.lng) })).sort((a, b) => a.d - b.d);
-    box.innerHTML = `<div class="sec" style="animation-delay:0s"><div class="sec-h"><span>주변 항공기 · 반경 460km</span><b>${airborne.length}대 비행 중</b></div><table class="tbl"><tbody>${airborne.slice(0, 4).map(a => `<tr><td>${esc(a.flight)} <span class="st">${esc(a.type2)}</span></td><td>${Math.round(a.d)}km</td><td>${Math.round(a.alt).toLocaleString()}ft</td></tr>`).join('') || '<tr><td class="none">비행 중인 항공기가 없어요</td></tr>'}</tbody></table></div>`;
+    box.innerHTML = `<div class="sec" style="animation-delay:0s"><div class="sec-h"><span>주변 항공기 · 반경 460km${j.source ? ' · ' + esc(j.source) : ''}</span><b>${airborne.length}대 비행 중</b></div><table class="tbl"><tbody>${airborne.slice(0, 4).map(a => `<tr><td>${esc(a.flight)} <span class="st">${esc(a.type2)}</span></td><td>${Math.round(a.d)}km</td><td>${Math.round(a.alt).toLocaleString()}ft</td></tr>`).join('') || '<tr><td class="none">비행 중인 항공기가 없어요</td></tr>'}</tbody></table></div>`;
   } catch { /* server offline */ }
 }
 
