@@ -491,6 +491,14 @@ button { font-family: inherit; }
 .wk-links li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
 .nt-s { font-weight: 400; color: var(--muted); font-size: 10px; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* ---------- 2D map ---------- */
+.flat-wrap { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+#flatCv { display: block; touch-action: none; cursor: grab; }
+.flat-tip { position: absolute; pointer-events: none; font: 12px var(--f-body); background: rgba(9,15,24,.94); border: 1px solid var(--line); padding: 6px 9px; border-radius: 4px; max-width: 250px; line-height: 1.45; }
+.av-h .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#app[data-view="flat"] .cam, #app[data-view="flat"] .banner { display: none; }
+#app[data-view="flat"] .dossier { z-index: 6; }
+@media (max-width: 760px) { .appview { top: calc(var(--band) + 150px); } .av-h { flex-wrap: wrap; gap: 6px; padding: 8px 10px; } .av-h .av-n, .av-f { display: none; } .av-h .btn { white-space: nowrap; padding: 4px 8px; } }
 </style>
 
 </head>
@@ -501,7 +509,7 @@ button { font-family: inherit; }
 
   <div class="topbar">
     <div class="brand"><b>◢</b> Watchfloor<small>LIVE</small></div>
-    <div class="apps" role="group" aria-label="앱 전환"><button type="button" data-app="map" aria-pressed="true">지도<kbd>M</kbd></button><button type="button" data-app="graph" aria-pressed="false">그래프<kbd>G</kbd></button><button type="button" data-app="table" aria-pressed="false">표<kbd>T</kbd></button></div>
+    <div class="apps" role="group" aria-label="앱 전환"><button type="button" data-app="map" aria-pressed="true">지도<kbd>M</kbd></button><button type="button" data-app="flat" aria-pressed="false">평면<kbd>D</kbd></button><button type="button" data-app="graph" aria-pressed="false">그래프<kbd>G</kbd></button><button type="button" data-app="table" aria-pressed="false">표<kbd>T</kbd></button></div>
     <div class="screens" role="group" aria-label="유형별 전용 화면"><button type="button" data-screen="quake" aria-pressed="false">지진<kbd>⇧1</kbd></button><button type="button" data-screen="disaster" aria-pressed="false">재난·태풍<kbd>⇧2</kbd></button><button type="button" data-screen="air" aria-pressed="false">항공<kbd>⇧3</kbd></button><button type="button" data-screen="news" aria-pressed="false">뉴스·분쟁<kbd>⇧4</kbd></button></div>
     <div class="clock"><span class="utc">UTC <b id="utc">--:--:--</b></span><span>KST <b id="kst">--:--:--</b></span></div>
     <div class="idx" title="최근 48시간 지진 규모로 계산한 자체 활동 지수예요"><span>활동 지수</span><span class="bar"><i id="idxBar"></i></span><b id="idxVal">0</b><span class="lv" id="idxLv">안정</span></div>
@@ -548,6 +556,11 @@ button { font-family: inherit; }
     <div class="av-h"><span class="av-t">그래프</span><span class="av-n" id="graphNote"></span><button type="button" class="btn" id="graphFit">맞춤</button><button type="button" class="btn" id="graphClear">선택 지우기</button></div>
     <div id="cy"></div>
     <div class="av-f">사건 노드를 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 나라나 출처 노드를 누르면 그걸로 좁혀요 · 사건에서 오른쪽 클릭은 반경 300km 확장</div>
+  </section>
+  <section class="appview" id="flatApp" hidden aria-label="평면 지도">
+    <div class="av-h"><span class="av-t">평면 지도</span><span class="av-n" id="flatNote"></span><button type="button" class="btn" id="flatLasso" aria-pressed="false">영역 선택</button><button type="button" class="btn" id="flatHeat" aria-pressed="false">히트맵</button><button type="button" class="btn" id="flatZoomIn" aria-label="확대">+</button><button type="button" class="btn" id="flatZoomOut" aria-label="축소">−</button><button type="button" class="btn" id="flatFit">전체</button><button type="button" class="btn" id="flatClear">선택 지우기</button></div>
+    <div class="flat-wrap"><canvas id="flatCv" aria-label="사건 평면 지도"></canvas><div class="flat-tip" id="flatTip" hidden></div></div>
+    <div class="av-f">끌어서 이동 · 휠로 확대 · 점을 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 태풍 경로는 아래 ▶ 재생을 따라 움직여요</div>
   </section>
   <section class="appview" id="tableApp" hidden aria-label="표">
     <div class="av-h"><span class="av-t">사건 표</span><span class="av-n" id="tableNote"></span></div>
@@ -748,6 +761,7 @@ function applyLayers() {
   world.arcsData([...(layers.route ? ROUTE_PAIRS : []), ...missileArcs, ...linkArcs, ...selArcs]);
   world.hexBinPointsData(conflictHeat());
   world.polygonsData([...countries, ...(layers.night ? nightCells : [])]);
+  if (S.app === 'flat') drawFlatSoon();
 }
 buildNight();
 setInterval(() => { buildNight(); if (layers.night) applyLayers(); }, 300000);
@@ -1907,12 +1921,14 @@ function setApp(app) {
   document.querySelectorAll('.apps button').forEach(b => b.setAttribute('aria-pressed', b.dataset.app === app));
   $('graphApp').hidden = app !== 'graph';
   $('tableApp').hidden = app !== 'table';
+  $('flatApp').hidden = app !== 'flat';
   $('app').dataset.view = app;
   // the globe stops flying around while you work in another app, and picks up again on return
   if (app !== 'map' && prePaused === null) { prePaused = paused; setPaused(true); }
   if (app === 'map' && prePaused !== null) { setPaused(prePaused); prePaused = null; }
   if (app === 'graph') renderGraph();
   if (app === 'table') renderTable();
+  if (app === 'flat') { if (!FL.k) { const pv = world.pointOfView(); FL.lng = ((pv.lng + 540) % 360) - 180; FL.lat = Math.max(-60, Math.min(60, pv.lat)); } drawFlat(); }
 }
 
 // ---- graph app (cytoscape) ----
@@ -2218,7 +2234,7 @@ function invApply(inv) {
   S.merges = (inv.merges || []).filter(m => m && EV.has(m.into) && EV.has(m.from));
   refreshMerges();
   setRange(Array.isArray(inv.range) && inv.range.length === 2 ? inv.range : null);
-  setApp(['map', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
+  setApp(['map', 'flat', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
   if (inv.pov && isFinite(inv.pov.lat)) { ctl.autoRotate = false; world.pointOfView(inv.pov, T(1500)); }
   emit(); renderInv(); restorePaths();
   logAct('조사 열기', inv.name);
@@ -2837,7 +2853,7 @@ async function importFile(file) {
     });
     emit(); restorePaths();
     const lat = use.reduce((s, x) => s + x.lat, 0) / use.length, lng = use.reduce((s, x) => s + x.lng, 0) / use.length;
-    if (S.app !== 'map') setApp('map');
+    if (S.app === 'flat') { FL.lng = lng; FL.lat = lat; FL.k = Math.max(FL.k, 12); drawFlat(); } else if (S.app !== 'map') setApp('map');
     if (busy) { clearTimeout(resumeTimer); resume(); }
     ctl.autoRotate = false; world.pointOfView({ lat, lng, altitude: use.length > 1 ? 1.2 : 0.6 }, T(1500));
     invMsg(`${file.name}에서 ${use.length}개를 가져왔어요${skipped ? ` · 위치가 없어 건너뛴 항목 ${skipped}개` : ''}${items.length > IMP_MAX ? ` · ${IMP_MAX}개까지만 가져왔어요` : ''}. 조사를 저장하면 보관돼요.`);
@@ -2854,6 +2870,193 @@ function renderInvSoon() { const m = $('invMsg')?.textContent, bad = $('invMsg')
 // outlines of imported lines and areas, plus storm tracks on the disaster screen
 function objShapes() { return [...S.extra.values()].filter(x => x.shape).map(x => ({ pts: x.shape.map(p => [p[0], p[1], 0.005]), c: rgba((OBJ_TYPES[x.ot] || OBJ_TYPES.place)[1], 0.8), w: 0.35 })); }
 function restorePaths() { if (!busy) world.pathsData([...(S.screen === 'disaster' ? stormPaths : []), ...objShapes()]); }
+
+// ================= 2D MAP (평면 지도) =================
+// Flat equirectangular map drawn on a canvas from the same countries file. Same data
+// and selection as the globe, plus lasso selection, a density heatmap, and storm
+// tracks that follow the timeline (▶ 재생 plays them back).
+const FL = { lng: 120, lat: 25, k: 0, heat: false, lasso: false, path: null, raf: 0, pts: [], drag: null, world: null };
+function flatWorld() {
+  if (FL.world || !countries.length) return FL.world;
+  const p = new Path2D();
+  countries.forEach(f => {
+    const g = f.geometry; if (!g) return;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    polys.forEach(poly => poly.forEach(ring => ring.forEach((c, i) => i ? p.lineTo(c[0], c[1]) : p.moveTo(c[0], c[1]))));
+  });
+  return (FL.world = p);
+}
+function flatSize() {
+  const c = $('flatCv'), r = c.parentElement.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); c.style.width = r.width + 'px'; c.style.height = r.height + 'px'; }
+  return { c, W: r.width, H: r.height, dpr };
+}
+function flatFit() { const { W, H } = flatSize(); FL.k = Math.max(W / 360, H / 170); FL.lng = 20; FL.lat = 10; drawFlat(); }
+const fx2 = (lng, W, off = 0) => (lng + off - FL.lng) * FL.k + W / 2;
+const fy2 = (lat, H) => (FL.lat - lat) * FL.k + H / 2;
+function drawFlatSoon() { if (S.app !== 'flat' || FL.raf) return; FL.raf = requestAnimationFrame(() => { FL.raf = 0; drawFlat(); }); }
+function drawFlat() {
+  if (S.app !== 'flat') return;
+  const { c, W, H, dpr } = flatSize();
+  if (!FL.k) FL.k = Math.max(W / 360, H / 170);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+  const offs = [-360, 0, 360].filter(o => fx2(180, W, o) > 0 && fx2(-180, W, o) < W);
+  // graticule
+  g.strokeStyle = 'rgba(120,160,200,.07)'; g.lineWidth = 1;
+  for (let lo = -180; lo <= 180; lo += 30) offs.forEach(o => { const x = fx2(lo, W, o); g.beginPath(); g.moveTo(x, fy2(85, H)); g.lineTo(x, fy2(-85, H)); g.stroke(); });
+  for (let la = -60; la <= 60; la += 30) { g.beginPath(); g.moveTo(0, fy2(la, H)); g.lineTo(W, fy2(la, H)); g.stroke(); }
+  // countries
+  const wp = flatWorld();
+  if (wp) offs.forEach(o => {
+    g.save(); g.setTransform(dpr * FL.k, 0, 0, -dpr * FL.k, dpr * fx2(0, W, o), dpr * fy2(0, H));
+    g.fillStyle = 'rgba(20,40,64,.55)'; g.fill(wp, 'evenodd');
+    g.lineWidth = 0.7 / FL.k; g.strokeStyle = 'rgba(140,190,235,.35)'; g.stroke(wp);
+    g.restore();
+  });
+  const evs = evList('all').filter(evOn).filter(ev => isFinite(ev.lat));
+  // heatmap of signal positions
+  if (FL.heat) drawHeat(g, evs, W, H, offs);
+  // imported outlines and storm tracks
+  const lines = [...objShapes().map(s => ({ pts: s.pts, c: s.c, w: 1.2 }))];
+  const tEnd = viewRange ? viewRange[1] : Date.now();
+  evs.filter(ev => ev.type === 'disaster').forEach(ev => {
+    const tr = ev.signals.find(s => s.kind === 'eonet' && s.data?.track)?.data.track; if (!tr || tr.length < 2) return;
+    const seen = tr.filter(p => !p[2] || p[2] <= tEnd);
+    if (seen.length) lines.push({ pts: seen, c: 'rgba(70,214,232,.85)', w: 1.6, head: seen[seen.length - 1], ev });
+  });
+  lines.forEach(l => offs.forEach(o => {
+    g.beginPath(); l.pts.forEach((p, i) => { const x = fx2(p[1], W, o), y = fy2(p[0], H); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.strokeStyle = l.c; g.lineWidth = l.w; g.stroke();
+    if (l.head) { g.beginPath(); g.arc(fx2(l.head[1], W, o), fy2(l.head[0], H), 5, 0, 7); g.fillStyle = 'rgba(70,214,232,.35)'; g.fill(); g.strokeStyle = '#46d6e8'; g.stroke(); }
+  }));
+  // links
+  S.links.forEach(lk => {
+    const a = nodeOf(lk.a), b = nodeOf(lk.b); if (!a || !b || !isFinite(a.lat) || !isFinite(b.lat) || a.mergedInto || b.mergedInto) return;
+    offs.forEach(o => { g.beginPath(); g.moveTo(fx2(a.lng, W, o), fy2(a.lat, H)); g.lineTo(fx2(b.lng, W, o), fy2(b.lat, H)); g.strokeStyle = lk.k === 'user' ? 'rgba(240,180,60,.85)' : 'rgba(70,214,232,.7)'; g.lineWidth = 1.3; g.setLineDash(lk.k === 'user' ? [] : [4, 3]); g.stroke(); g.setLineDash([]); });
+  });
+  // events, then user objects on top
+  FL.pts = [];
+  const any = S.sel.size > 0;
+  evs.slice().sort((a, b) => a.severity - b.severity).forEach(ev => offs.forEach(o => {
+    const x = fx2(ev.lng, W, o), y = fy2(ev.lat, H); if (x < -20 || x > W + 20 || y < -20 || y > H + 20) return;
+    const r = 2.5 + ev.severity * 1.6 + Math.min(4, Math.log2(ev.signals.length)) + Math.min(4, FL.k / 30);
+    const on = S.sel.has(ev.id), col = tcol(ev.type);
+    g.beginPath(); g.arc(x, y, r, 0, 7);
+    g.fillStyle = rgba(col, any && !on ? 0.15 : ev.status === 'closed' ? 0.35 : 0.6); g.fill();
+    g.lineWidth = on ? 2.5 : 1; g.strokeStyle = on ? '#fff' : rgba(col, any && !on ? 0.3 : 0.95); g.stroke();
+    FL.pts.push({ x, y, r, ev });
+  }));
+  objMarkers().forEach(xo => offs.forEach(o => {
+    const x = fx2(xo.lng, W, o), y = fy2(xo.lat, H), col = (OBJ_TYPES[xo.ot] || OBJ_TYPES.place)[1];
+    g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillStyle = rgba(col, .5); g.strokeStyle = col; g.lineWidth = 1.2; g.fillRect(-4.5, -4.5, 9, 9); g.strokeRect(-4.5, -4.5, 9, 9); g.restore();
+    if (FL.k > 8) { g.font = '11px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#d6e2ee'; g.fillText(xo.label, x + 8, y + 4); }
+    FL.pts.push({ x, y, r: 6, obj: xo });
+  }));
+  // lasso in progress
+  if (FL.path && FL.path.length > 1) { g.beginPath(); FL.path.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = 'rgba(240,180,60,.08)'; g.fill(); g.setLineDash([5, 4]); g.strokeStyle = '#f0b43c'; g.lineWidth = 1.2; g.stroke(); g.setLineDash([]); }
+  $('flatNote').textContent = `사건 ${evs.length}건${any ? ` · 선택 ${S.sel.size}건` : ''}${viewRange ? ' · ' + fmt(tEnd, 'Asia/Seoul') + ' KST까지' : ''}${FL.lasso ? ' · 끌어서 영역을 그리면 그 안의 사건을 골라요 (Shift: 더하기)' : ''}`;
+}
+function drawHeat(g, evs, W, H, offs) {
+  const s = 4, w = Math.ceil(W / s), h = Math.ceil(H / s);
+  const acc = new Float32Array(w * h), rad = Math.max(3, Math.min(14, FL.k / 2.5));
+  evs.forEach(ev => ev.signals.forEach(sig => {
+    const la = isFinite(sig.lat) ? sig.lat : ev.lat, lo = isFinite(sig.lng) ? sig.lng : ev.lng;
+    offs.forEach(o => {
+      const cx = fx2(lo, W, o) / s, cy = fy2(la, H) / s;
+      for (let y = Math.max(0, Math.floor(cy - rad)); y < Math.min(h, cy + rad); y++) for (let x = Math.max(0, Math.floor(cx - rad)); x < Math.min(w, cx + rad); x++) {
+        const d2 = ((x - cx) ** 2 + (y - cy) ** 2) / (rad * rad); if (d2 < 1) acc[y * w + x] += (1 - d2) * (0.5 + ev.severity * 0.25);
+      }
+    });
+  }));
+  let max = 0; for (const v of acc) if (v > max) max = v;
+  if (!max) return;
+  const img = new ImageData(w, h);
+  for (let i = 0; i < acc.length; i++) {
+    const t = Math.sqrt(acc[i] / max); if (t < 0.03) continue;
+    // dark red → orange → yellow
+    img.data[i * 4] = 255; img.data[i * 4 + 1] = Math.round(60 + 180 * t); img.data[i * 4 + 2] = Math.round(40 * t); img.data[i * 4 + 3] = Math.round(200 * Math.min(1, t * 1.2));
+  }
+  const oc = document.createElement('canvas'); oc.width = w; oc.height = h; oc.getContext('2d').putImageData(img, 0, 0);
+  g.save(); g.imageSmoothingEnabled = true; g.globalAlpha = 0.75; g.drawImage(oc, 0, 0, W, H); g.restore();
+}
+function flatHit(x, y) {
+  let best = null, bd = 12;
+  FL.pts.forEach(p => { const d = Math.hypot(p.x - x, p.y - y) - p.r; if (d < bd) { bd = d; best = p; } });
+  return best;
+}
+function inPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function setupFlat() {
+  const c = $('flatCv'), tip = $('flatTip');
+  const pos = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  c.addEventListener('pointerdown', e => {
+    c.setPointerCapture(e.pointerId);
+    const [x, y] = pos(e);
+    if (FL.lasso) { FL.path = [[x, y]]; FL.add = e.shiftKey; return; }
+    FL.drag = { x, y, lng: FL.lng, lat: FL.lat, moved: false };
+  });
+  c.addEventListener('pointermove', e => {
+    const [x, y] = pos(e);
+    if (FL.path) { const l = FL.path[FL.path.length - 1]; if (Math.hypot(l[0] - x, l[1] - y) > 4) { FL.path.push([x, y]); drawFlatSoon(); } return; }
+    if (FL.drag) {
+      if (Math.hypot(x - FL.drag.x, y - FL.drag.y) > 3) FL.drag.moved = true;
+      FL.lng = FL.drag.lng - (x - FL.drag.x) / FL.k; FL.lat = Math.max(-80, Math.min(80, FL.drag.lat + (y - FL.drag.y) / FL.k));
+      FL.lng = ((FL.lng + 540) % 360) - 180;
+      tip.hidden = true; drawFlatSoon(); return;
+    }
+    const h = flatHit(x, y);
+    if (h) {
+      tip.hidden = false; tip.style.left = Math.min(x + 14, c.clientWidth - 260) + 'px'; tip.style.top = (y + 14) + 'px';
+      tip.innerHTML = h.ev ? `<b style="color:${tcol(h.ev.type)}">${esc(TYPE[h.ev.type]?.ko || '')}</b> · ${pips(h.ev.severity)} · 출처 ${h.ev.sources.length}<br>${esc(h.ev.title)}<br><span class="st">${esc(h.ev.place)} · ${ago(h.ev.updated)}</span>` : `내 객체 · ${esc((OBJ_TYPES[h.obj.ot] || OBJ_TYPES.place)[0])}<br>${esc(h.obj.label)}`;
+      c.style.cursor = 'pointer';
+    } else { tip.hidden = true; c.style.cursor = FL.lasso ? 'crosshair' : 'grab'; }
+  });
+  c.addEventListener('pointerup', e => {
+    const [x, y] = pos(e);
+    if (FL.path) {
+      const poly = FL.path; FL.path = null;
+      if (poly.length > 2) {
+        if (!FL.add) S.sel.clear();
+        const hit = new Set(FL.pts.filter(p => p.ev && inPoly(p.x, p.y, poly)).map(p => p.ev.id));
+        hit.forEach(id => S.sel.add(id));
+        logAct('영역으로 선택', `${hit.size}건`);
+        emit();
+      }
+      drawFlatSoon(); return;
+    }
+    const d = FL.drag; FL.drag = null;
+    if (d && !d.moved) {
+      const h = flatHit(x, y);
+      if (h?.ev) { if (e.shiftKey) select(h.ev.id, true); else { S.sel.add(h.ev.id); emit(); openEvent(h.ev, true); } }
+      else if (h?.obj) openObj(S.extra.get(h.obj.id) || h.obj);
+    }
+  });
+  c.addEventListener('pointerleave', () => { tip.hidden = true; });
+  c.addEventListener('wheel', e => {
+    e.preventDefault();
+    const [x, y] = pos(e), { W, H } = flatSize();
+    const lng = FL.lng + (x - W / 2) / FL.k, lat = FL.lat - (y - H / 2) / FL.k;
+    FL.k = Math.max(W / 400, Math.min(400, FL.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    FL.lng = lng - (x - W / 2) / FL.k; FL.lat = Math.max(-80, Math.min(80, lat + (y - H / 2) / FL.k));
+    drawFlatSoon();
+  }, { passive: false });
+  $('flatZoomIn').addEventListener('click', () => { FL.k = Math.min(400, FL.k * 1.5); drawFlat(); });
+  $('flatZoomOut').addEventListener('click', () => { const { W } = flatSize(); FL.k = Math.max(W / 400, FL.k / 1.5); drawFlat(); });
+  $('flatFit').addEventListener('click', flatFit);
+  $('flatLasso').addEventListener('click', e => { FL.lasso = !FL.lasso; e.currentTarget.setAttribute('aria-pressed', FL.lasso); c.style.cursor = FL.lasso ? 'crosshair' : 'grab'; drawFlat(); });
+  $('flatHeat').addEventListener('click', e => { FL.heat = !FL.heat; e.currentTarget.setAttribute('aria-pressed', FL.heat); drawFlat(); });
+  $('flatClear').addEventListener('click', () => clearSelection());
+  addEventListener('resize', drawFlatSoon);
+}
+setupFlat();
 
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
@@ -2972,6 +3175,7 @@ addEventListener('keydown', k => {
   else if (k.key === 'm' || k.key === 'M') setApp('map');
   else if (k.key === 'g' || k.key === 'G') setApp('graph');
   else if (k.key === 't' || k.key === 'T') setApp('table');
+  else if (k.key === 'd' || k.key === 'D') setApp('flat');
   else if (k.key >= '1' && k.key <= '9') toggleLayer(LAYER_DEFS[+k.key - 1][0]);
   else if (k.key === '/') { k.preventDefault(); $('q').focus(); }
 });
