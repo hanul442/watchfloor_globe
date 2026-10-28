@@ -2,7 +2,7 @@
   "name": "watchfloor-live",
   "version": "1.0.0",
   "private": true,
-  "description": "Personal real-time OSINT globe: earthquakes, Japan early warnings, aircraft, webcams",
+  "description": "Personal real-time OSINT globe: events from quakes, warnings, news, NASA hazards, with aircraft, satellites, ships and webcams",
   "type": "module",
   "main": "server.js",
   "scripts": {
