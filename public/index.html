@@ -475,6 +475,22 @@ button { font-family: inherit; }
 .al-toasts { position: absolute; z-index: 8; left: 50%; transform: translateX(-50%); top: calc(var(--band) + 70px); display: grid; gap: 8px; width: min(420px, calc(100% - 32px)); pointer-events: none; }
 .al-toast { pointer-events: auto; text-align: left; display: grid; gap: 3px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; cursor: pointer; font: 13px var(--f-body); backdrop-filter: blur(6px); animation: dossierIn .3s ease-out; }
 .al-toast b { font-weight: 600; }
+/* ---------- user objects / links / notes / merge ---------- */
+.picking #globe { cursor: crosshair; }
+.pick-hint { position: absolute; z-index: 8; left: 50%; transform: translateX(-50%); top: calc(var(--band) + 70px); background: var(--panel); border: 1px solid var(--accent); color: var(--fg); padding: 8px 14px; border-radius: 6px; font-size: 13px; }
+.objform { position: absolute; z-index: 9; left: 50%; top: calc(var(--band) + 80px); transform: translateX(-50%); width: min(360px, calc(100% - 32px)); box-sizing: border-box; display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--accent); border-radius: 6px; padding: 12px 16px 14px; font-size: 12px; color: var(--muted); backdrop-filter: blur(6px); }
+.objform .tp-h, .objform .note, .objform .inv-act { grid-column: 1 / -1; }
+.objform input, .objform textarea, .objform select, .wk-form select, .wk-form input, .wk-note { font: 13px var(--f-body); color: var(--fg); background: rgba(9,15,24,.85); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; box-sizing: border-box; min-width: 0; }
+.objform .note { margin: 0; font-size: 11px; }
+.of-ll { font: 12px var(--f-mono); color: var(--fg); }
+.obj-note { white-space: pre-wrap; font-size: 13px; line-height: 1.55; border-left: 2px solid var(--tc); padding-left: 10px; margin: 10px 0; }
+.wk-form { display: flex; gap: 6px; margin-top: 6px; }
+.wk-form select { flex: 2; } .wk-form input { flex: 1.3; } .wk-form .btn { flex: none; padding: 5px 10px; font-size: 11px; }
+.wk-note { resize: vertical; margin-top: 4px; }
+.wk-links { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; }
+.wk-links li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.nt-s { font-weight: 400; color: var(--muted); font-size: 10px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 
 </head>
@@ -501,6 +517,7 @@ button { font-family: inherit; }
   </div>
 
   <div class="al-toasts" id="alToasts" aria-live="polite"></div>
+  <datalist id="relList"><option value="원인"><option value="결과"><option value="같은 지역"><option value="같은 출처"><option value="대응"><option value="관련"></datalist>
   <aside class="typepanel" id="typePanel" hidden aria-label="유형별 전용 화면"></aside>
 
   <aside class="rail">
@@ -666,11 +683,11 @@ const world = new Globe(el)
     : tip(`M${d.mag.toFixed(1)} · ${esc(d.place)}`))
   .onPointClick(d => { if (d.mk === 'ev') { cinemaQueue = []; openEvent(d.ev, true); } else if (d.type !== 'ac' && d.type !== 'ship') focusOn(d, true); })
   .labelLat('lat').labelLng('lng')
-  .labelText(d => d.kind === 'choke' ? d.en : d.kind === 'sat' && /^(ISS|CSS|TIANHE)/.test(d.name) ? d.name.split(' ')[0] : '')
-  .labelSize(d => d.kind === 'sat' ? 0.5 : 0.55).labelDotRadius(d => d.kind === 'plant' ? 0.28 : d.kind === 'sat' ? 0.2 : 0.4).labelAltitude(d => d.kind === 'sat' ? Math.min(d.alt, 2500) / 6371 : 0.006).labelResolution(2).labelsTransitionDuration(0)
-  .labelColor(d => d.kind === 'sat' ? 'rgba(230,240,255,0.9)' : d.kind === 'plant' ? (d.hot ? '#ff4d3d' : 'rgba(198,240,90,0.9)') : 'rgba(70,214,232,0.9)')
-  .labelLabel(d => d.kind === 'sat' ? tip(`위성 · ${esc(d.name)}<br>고도 ${Math.round(d.alt).toLocaleString()} km`) : tip(`${d.kind === 'plant' ? '원전 · ' : '해상 요충지 · '}${esc(d.ko)}${d.cc ? ' (' + d.cc + ')' : ''}`))
-  .onLabelClick(d => { cinemaQueue = []; if (d.kind === 'sat') satFocus(d); else openPlace({ name: d.kind === 'plant' ? d.ko + ' 원전' : d.ko, en: d.en, lat: d.lat, lng: d.lng, kind: d.kind }); })
+  .labelText(d => d.kind === 'obj' ? (/^[\x20-\x7E]*$/.test(d.label) ? d.label : '') : d.kind === 'choke' ? d.en : d.kind === 'sat' && /^(ISS|CSS|TIANHE)/.test(d.name) ? d.name.split(' ')[0] : '')
+  .labelSize(d => d.kind === 'sat' ? 0.5 : d.kind === 'obj' ? 0.6 : 0.55).labelDotRadius(d => d.kind === 'obj' ? 0.45 : d.kind === 'plant' ? 0.28 : d.kind === 'sat' ? 0.2 : 0.4).labelAltitude(d => d.kind === 'sat' ? Math.min(d.alt, 2500) / 6371 : 0.006).labelResolution(2).labelsTransitionDuration(0)
+  .labelColor(d => d.kind === 'obj' ? (OBJ_TYPES[d.ot] || OBJ_TYPES.place)[1] : d.kind === 'sat' ? 'rgba(230,240,255,0.9)' : d.kind === 'plant' ? (d.hot ? '#ff4d3d' : 'rgba(198,240,90,0.9)') : 'rgba(70,214,232,0.9)')
+  .labelLabel(d => d.kind === 'obj' ? tip(`내 객체 · ${esc((OBJ_TYPES[d.ot] || OBJ_TYPES.place)[0])}<br>${esc(d.label)}`) : d.kind === 'sat' ? tip(`위성 · ${esc(d.name)}<br>고도 ${Math.round(d.alt).toLocaleString()} km`) : tip(`${d.kind === 'plant' ? '원전 · ' : '해상 요충지 · '}${esc(d.ko)}${d.cc ? ' (' + d.cc + ')' : ''}`))
+  .onLabelClick(d => { cinemaQueue = []; if (d.kind === 'obj') { const x = S.extra.get(d.id); if (x) openObj(x); } else if (d.kind === 'sat') satFocus(d); else openPlace({ name: d.kind === 'plant' ? d.ko + ' 원전' : d.ko, en: d.en, lat: d.lat, lng: d.lng, kind: d.kind }); })
   .hexBinPointLat('lat').hexBinPointLng('lng').hexBinResolution(3).hexMargin(0.25).hexBinMerge(false)
   .hexAltitude(h => 0.004 + Math.min(h.sumWeight, 12) * 0.006)
   .hexTopColor(h => `rgba(255,92,92,${Math.min(0.85, 0.3 + h.sumWeight * 0.08)})`).hexSideColor(() => 'rgba(255,92,92,0.25)')
@@ -726,8 +743,8 @@ function buildNight() {
 const recentQuakes = () => events.filter(e => e.time > Date.now() - 7 * 864e5);
 function applyLayers() {
   world.pointsData([...evMarkers(), ...(layers.aircraft ? acPoints : []), ...(layers.ships ? shipPts : [])]);
-  world.labelsData([...(layers.plant ? PLANTS : []), ...(layers.choke ? CHOKES : []), ...(layers.sats ? satPts : [])]);
-  const selArcs = S.links.map(l => { const a = EV.get(l.a), b = EV.get(l.b) || S.extra.get(l.b); return a && b && isFinite(b.lat) ? { type: 'link', startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, c: '#46d6e8' } : null; }).filter(Boolean);
+  world.labelsData([...(layers.plant ? PLANTS : []), ...(layers.choke ? CHOKES : []), ...(layers.sats ? satPts : []), ...objMarkers()]);
+  const selArcs = S.links.map(l => { const a = EV.get(l.a) || S.extra.get(l.a), b = EV.get(l.b) || S.extra.get(l.b); return a && b && isFinite(a.lat) && isFinite(b.lat) && !a.mergedInto && !b.mergedInto ? { type: 'link', startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, c: l.k === 'user' ? '#f0b43c' : '#46d6e8' } : null; }).filter(Boolean);
   world.arcsData([...(layers.route ? ROUTE_PAIRS : []), ...missileArcs, ...linkArcs, ...selArcs]);
   world.hexBinPointsData(conflictHeat());
   world.polygonsData([...countries, ...(layers.night ? nightCells : [])]);
@@ -1211,9 +1228,11 @@ function upsertEvent(raw) {
   }
   EV.set(ev.id, ev);
   ev.signals.forEach(s => SIG2EV.set(s.id, ev.id));
+  if (S.merges?.length && S.merges.some(m => m.into === ev.id || m.from === ev.id)) refreshMerges();
   return ev;
 }
 function inView(ev) {
+  if (ev.mergedInto) return false;
   if (ev.snap) return true;   // copies kept by an open investigation
   if (!viewRange) return ev.updated > Date.now() - 7 * 864e5;
   return ev.start <= viewRange[1] && ev.updated >= viewRange[0];
@@ -1378,6 +1397,7 @@ function appendEventSections(d, ev, opt = {}) {
   [...box.children].forEach(n => d.append(n));
   appendLinks(d, { lat: ev.lat, lng: ev.lng, name: ev.place, evId: ev.id, color: tcol(ev.type), km: ev.type === 'quake' ? 900 : 700 });
   appendSearchAround(d, ev);
+  appendWork(d, ev);
   appendAI(d, { eventId: ev.id }, '이 사건 Claude 브리핑');
   d.querySelectorAll('.sec').forEach((n, i) => { if (!n.style.animationDelay) n.style.animationDelay = (reduce ? 0 : 500 + i * 200) + 'ms'; });
 }
@@ -1720,7 +1740,7 @@ function inRing(x, y, ring) {
 let countryCentres = null;
 function evCountry(ev) {
   if (!isFinite(ev.lat)) return '미상';
-  const a = anchorOf(ev);
+  const a = ev.signals ? anchorOf(ev) : null;
   const key = (a && a.kind === 'news' && a.scope === 'country' ? 'p:' + a.place : '') || ev.lat.toFixed(2) + ',' + ev.lng.toFixed(2);
   if (countryCache.has(key)) return countryCache.get(key);
   if (!countries.length) return '미상';
@@ -1913,8 +1933,8 @@ function graphData() {
       edges.push({ data: { id: ev.id + '>s:' + src, source: ev.id, target: 's:' + src, label: '보도', k: 'src' } });
     });
   });
-  S.extra.forEach(x => addN(x.id, { label: x.label, k: x.k, color: x.k === 'plant' ? '#c6f05a' : '#46d6e8', size: 13 }));
-  S.links.forEach((l, i) => { if (nodes.has(l.a) && nodes.has(l.b)) edges.push({ data: { id: 'l' + i, source: l.a, target: l.b, label: l.label, k: 'link' } }); });
+  S.extra.forEach(x => addN(x.id, { label: x.label, k: x.k, color: x.k === 'obj' ? (OBJ_TYPES[x.ot] || OBJ_TYPES.place)[1] : x.k === 'plant' ? '#c6f05a' : '#46d6e8', size: x.k === 'obj' ? 16 : 13 }));
+  S.links.forEach((l, i) => { if (nodes.has(l.a) && nodes.has(l.b)) edges.push({ data: { id: 'l' + i + ':' + l.a + '>' + l.b, source: l.a, target: l.b, label: l.label, k: l.k === 'user' ? 'ulink' : 'link' } }); });
   return { nodes: [...nodes.values()], edges, auto: !S.sel.size };
 }
 function renderGraph() {
@@ -1933,6 +1953,8 @@ function renderGraph() {
         { selector: 'node:selected', style: { 'border-color': '#ffffff', 'border-width': 3 } },
         { selector: 'edge', style: { width: 1, 'line-color': '#2c4058', 'curve-style': 'bezier', 'font-size': 8, color: '#7a8ea3', 'text-rotation': 'autorotate', 'text-background-color': '#05080d', 'text-background-opacity': 0.7, 'text-background-padding': 1 } },
         { selector: 'edge[k="link"]', style: { width: 1.8, 'line-color': '#46d6e8', label: 'data(label)', 'line-style': 'solid' } },
+        { selector: 'edge[k="ulink"]', style: { width: 2, 'line-color': '#f0b43c', label: 'data(label)', color: '#f0c46c' } },
+        { selector: 'node[k="obj"]', style: { shape: 'hexagon', 'background-opacity': 0.45 } },
         { selector: 'edge[k="src"]', style: { 'line-style': 'dashed', 'line-color': '#3a2c5c' } },
         { selector: '.dim', style: { opacity: 0.18 } }
       ]
@@ -1942,10 +1964,11 @@ function renderGraph() {
       if (d.k === 'ev') { const ev = EV.get(d.id); if (!ev) return; if (e.originalEvent?.shiftKey) return select(d.id, true); S.sel.add(d.id); openEvent(ev, true); emit(); }
       else if (d.k === 'country') setFilter('country', d.label, true);
       else if (d.k === 'source') setFilter('source', d.label, true);
-      else { const x = S.extra.get(d.id); if (x) openPlace({ name: x.label, lat: x.lat, lng: x.lng, kind: x.k }); }
+      else { const x = S.extra.get(d.id); if (x) x.k === 'obj' ? openObj(x) : openPlace({ name: x.label, lat: x.lat, lng: x.lng, kind: x.k }); }
     });
     cy.on('mouseover', 'node', e => { const n = e.target; cy.elements().addClass('dim'); n.closedNeighborhood().removeClass('dim'); });
     cy.on('mouseout', 'node', () => cy.elements().removeClass('dim'));
+    cy.on('layoutstop', () => { if (cy.zoom() > 1.3) { cy.zoom(1.3); cy.center(); } });
     cy.on('cxttap', 'node[k="ev"]', e => { const ev = EV.get(e.target.id()); if (ev) { searchAround(ev, 'near'); } });
   }
   const keep = new Set([...nodes.map(n => n.data.id), ...edges.map(e => e.data.id)]);
@@ -2158,16 +2181,16 @@ function invWrite(list) {
 function invMsg(t, bad) { const n = $('invMsg'); if (!n) return; n.textContent = t; n.classList.toggle('bad', !!bad); clearTimeout(invMsg.t); invMsg.t = setTimeout(() => { n.textContent = ''; }, 6000); }
 
 // copy of an event small enough for a link: few signals, no long text
-const invSlim = (ev, max = 6) => ({ ...ev, snap: true, signals: ev.signals.slice(0, max).map(({ desc, ...s }) => s) });
+const invSlim = (ev, max = 6) => { const { _base, merged, mergedInto, ...rest } = ev; return { ...rest, ...(_base ? { severity: _base.sev, sources: _base.sources, start: _base.start, updated: _base.updated } : {}), snap: true, signals: ev.signals.filter(s => !s.mergedFrom).slice(0, max).map(({ desc, ...s }) => s) }; };
 
 function invCapture() {
-  const ids = new Set([...S.sel, ...S.links.flatMap(l => [l.a, l.b])]);
+  const ids = new Set([...S.sel, ...S.links.flatMap(l => [l.a, l.b]), ...S.notes.keys(), ...S.merges.flatMap(m => [m.into, m.from])]);
   const pov = world.pointOfView();
   return {
     v: 1, id: S.inv?.id || 'inv-' + Date.now().toString(36), name: ($('invName')?.value || '').trim() || S.inv?.name || '이름 없는 조사',
     created: S.inv?.created || Date.now(), updated: Date.now(),
     filters: Object.fromEntries(FACETS.map(([k]) => [k, [...S.filters[k]]])),
-    sel: [...S.sel], links: S.links.slice(), extra: [...S.extra.values()],
+    sel: [...S.sel], links: S.links.slice(), extra: [...S.extra.values()], notes: Object.fromEntries(S.notes), merges: S.merges.map(m => ({ ...m })),
     app: S.app, screen: S.screen || null, range: viewRange ? viewRange.slice() : null,
     pov: { lat: +pov.lat.toFixed(3), lng: +pov.lng.toFixed(3), altitude: +pov.altitude.toFixed(2) },
     note: ($('invNote')?.value ?? S.invNote) || '',
@@ -2191,6 +2214,9 @@ function invApply(inv) {
   S.extra = new Map((inv.extra || []).filter(x => x && x.id).map(x => [x.id, x]));
   S.inv = { id: inv.id, name: inv.name, created: inv.created };
   S.invNote = inv.note || '';
+  S.notes = new Map(Object.entries(inv.notes || {}).filter(([, v]) => typeof v === 'string'));
+  S.merges = (inv.merges || []).filter(m => m && EV.has(m.into) && EV.has(m.from));
+  refreshMerges();
   setRange(Array.isArray(inv.range) && inv.range.length === 2 ? inv.range : null);
   setApp(['map', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
   if (inv.pov && isFinite(inv.pov.lat)) { ctl.autoRotate = false; world.pointOfView(inv.pov, T(1500)); }
@@ -2213,7 +2239,7 @@ function invNew() {
   for (const [id, ev] of EV) if (ev.snap) EV.delete(id);
   S.inv = null; S.invNote = '';
   FACETS.forEach(([k]) => S.filters[k].clear());
-  S.sel.clear(); S.links = []; S.extra.clear();
+  S.sel.clear(); S.links = []; S.extra.clear(); S.notes.clear(); S.merges = []; refreshMerges();
   setRange(null);
   emit(); renderInv();
 }
@@ -2299,7 +2325,8 @@ addEventListener('hashchange', invFromHash);
 function invSum() {
   const nF = FACETS.reduce((n, [k]) => n + S.filters[k].size, 0);
   const snaps = [...EV.values()].filter(ev => ev.snap).length;
-  return `선택 ${S.sel.size}건 · 연결 ${S.links.length}개 · 필터 ${nF}개${viewRange ? ' · 기간 지정' : ''}${S.screen ? ' · ' + SCREENS[S.screen].title : ''}${snaps ? ` · 보관 사본 ${snaps}건` : ''}`;
+  const nObj = [...S.extra.values()].filter(x => x.k === 'obj').length;
+  return `선택 ${S.sel.size}건 · 연결 ${S.links.length}개 · 필터 ${nF}개${nObj ? ` · 내 객체 ${nObj}개` : ''}${S.notes.size ? ` · 메모 ${S.notes.size}건` : ''}${S.merges.length ? ` · 합침 ${S.merges.length}건` : ''}${viewRange ? ' · 기간 지정' : ''}${S.screen ? ' · ' + SCREENS[S.screen].title : ''}${snaps ? ` · 보관 사본 ${snaps}건` : ''}`;
 }
 function renderInv() {
   const box = $('invPane'); if (!box) return;
@@ -2315,6 +2342,7 @@ function renderInv() {
         <button type="button" class="btn" id="invSave">${S.inv ? '저장' : '새로 저장'}</button>
         <button type="button" class="btn" id="invLink">공유 링크 복사</button>
         <button type="button" class="btn" id="invFile">파일로 내보내기</button>
+        <button type="button" class="btn" id="objAdd">지구본에 객체 추가</button>
         <button type="button" class="btn" id="invReport">보고서 만들기</button>
         <button type="button" class="btn" id="invNew">새 조사</button>
       </div>
@@ -2331,6 +2359,7 @@ function renderInv() {
   $('invFile').addEventListener('click', invExport);
   $('invNew').addEventListener('click', invNew);
   $('invReport').addEventListener('click', openReport);
+  $('objAdd').addEventListener('click', () => { if (S.app !== 'map') setApp('map'); startPick(); });
   renderAlerts();
   $('invImport').addEventListener('click', () => $('invFileIn').click());
   $('invFileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) invImportFile(f); });
@@ -2393,8 +2422,10 @@ ${shot ? `<img src="${shot}" alt="지구본 화면">` : ''}
 <h2>사건</h2>
 ${evs.map(ev => `<section class="ev"><h3>${e(ev.title)}</h3>
 <div class="m"><span class="sev">${sevDots(ev.severity)}</span> ${e(TYPE[ev.type]?.ko || ev.type)} · ${e(ev.place)} · ${e(evCountry(ev))} · ${ev.status === 'open' ? '진행 중' : '종료'} · 신뢰도 ${Math.round((ev.confidence || 0) * 100)}% · ${fmt(ev.start, 'Asia/Seoul')}–${fmt(ev.updated, 'Asia/Seoul')} KST${ev.snap ? ' · 보관 사본' : ''}</div>
+${S.notes.get(ev.id) ? `<div class="note">${e(S.notes.get(ev.id))}</div>` : ''}${ev.merged?.length ? `<div class="m">분석자가 합친 보도 ${ev.merged.length}건 포함</div>` : ''}
 <table><thead><tr><th>시각(KST)</th><th>출처</th><th>내용</th></tr></thead><tbody>${ev.signals.slice(0, 12).map(s => `<tr><td>${fmt(s.time, 'Asia/Seoul')}</td><td>${e(s.src)}</td><td>${s.link ? `<a href="${e(s.link)}" target="_blank" rel="noopener">${e(s.title)}</a>` : e(s.title)}</td></tr>`).join('')}</tbody></table></section>`).join('')}
 ${S.links.length ? `<h2>연결</h2><table><thead><tr><th>A</th><th>관계</th><th>B</th></tr></thead><tbody>${S.links.map(l => `<tr><td>${e(label(l.a))}</td><td>${e(l.label || l.k)}</td><td>${e(label(l.b))}</td></tr>`).join('')}</tbody></table>` : ''}
+${[...S.extra.values()].some(x => x.k === 'obj') ? `<h2>분석자가 추가한 객체</h2><table><thead><tr><th>이름</th><th>종류</th><th>위치</th><th>메모</th></tr></thead><tbody>${[...S.extra.values()].filter(x => x.k === 'obj').map(x => `<tr><td>${e(x.label)}</td><td>${e((OBJ_TYPES[x.ot] || OBJ_TYPES.place)[0])}</td><td>${x.lat.toFixed(3)}, ${x.lng.toFixed(3)}</td><td>${e(x.note)}</td></tr>`).join('')}</tbody></table>` : ''}
 <h2>출처와 한계</h2>
 <p class="meta">USGS, 일본 기상청(P2P지진정보), NASA EONET, 공개 뉴스 RSS를 자동으로 묶은 결과예요. 기사 위치는 제목의 지명으로 추정한 값이라 틀릴 수 있어요. 공식 발표가 없는 사건의 신뢰도는 보도한 언론사 수로만 계산했어요.</p>
 </main></body></html>`;
@@ -2493,6 +2524,206 @@ function renderAlerts() {
   $('alAdd').addEventListener('click', alCreate);
   box.querySelectorAll('.al-tog').forEach(b => b.addEventListener('click', () => { const l2 = alAll(); const r = l2.find(x => x.id === b.dataset.id); if (r) { r.on = !r.on; alWrite(l2); renderAlerts(); } }));
   box.querySelectorAll('.al-del').forEach(b => b.addEventListener('click', () => { const l2 = alAll(); const r = l2.find(x => x.id === b.dataset.id); if (r && confirm(`알림 규칙 "${r.name}"을(를) 지울까요?`)) { alWrite(l2.filter(x => x.id !== r.id)); renderAlerts(); logAct('알림 규칙 삭제', r.name); } }));
+}
+
+// ================= USER OBJECTS · LINKS · NOTES · MERGE =================
+// Analysts add their own objects (places, facilities, areas, note pins), draw their
+// own links, keep notes on events, and merge reports they judge to be one event.
+// All of it belongs to the investigation and is saved with it. No person objects:
+// this tool tracks public events and places only.
+const OBJ_TYPES = { place: ['장소', '#d6e2ee'], facility: ['시설', '#c6f05a'], area: ['관심 지역', '#46d6e8'], memo: ['메모 지점', '#f0b43c'] };
+S.notes = new Map();       // event id -> note text
+S.merges = [];             // { into, from } : "from" is shown as part of "into"
+let pickMode = false;
+
+const nodeOf = id => EV.get(id) || S.extra.get(id);
+const nodeName = id => { const n = nodeOf(id); return n ? (n.title || n.label || id) : id; };
+
+// ---- objects ----
+function objMarkers() { return [...S.extra.values()].filter(x => x.k === 'obj').map(x => ({ ...x, kind: 'obj' })); }
+function startPick() {
+  pickMode = true; ctl.autoRotate = false;
+  $('app').classList.add('picking');
+  showHint('지구본에서 객체를 놓을 곳을 누르세요 · Esc로 취소');
+}
+function stopPick() { pickMode = false; $('app').classList.remove('picking'); $('pickHint')?.remove(); }
+function showHint(t) {
+  $('pickHint')?.remove();
+  const h = document.createElement('div'); h.id = 'pickHint'; h.className = 'pick-hint'; h.setAttribute('role', 'status'); h.textContent = t;
+  $('app').append(h);
+}
+function pickAt(c) { if (!pickMode || !c || !isFinite(c.lat)) return; stopPick(); objForm({ lat: c.lat, lng: c.lng }); }
+world.onGlobeClick(c => pickAt(c)).onPolygonClick((_, __, c) => pickAt(c)).onHexPolygonClick((_, __, c) => pickAt(c));
+function objForm(init) {
+  $('objForm')?.remove();
+  const f = document.createElement('form');
+  f.id = 'objForm'; f.className = 'objform';
+  const x = init.id ? init : { ot: 'place', label: '', note: '', ...init };
+  f.innerHTML = `<div class="tp-h"><span class="tp-t">${init.id ? '객체 고치기' : '새 객체'}</span><button type="button" class="close" aria-label="닫기">×</button></div>
+    <label for="ofType">종류</label><select id="ofType">${Object.entries(OBJ_TYPES).map(([k, [l]]) => `<option value="${k}"${x.ot === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+    <label for="ofName">이름</label><input id="ofName" type="text" maxlength="60" required autocomplete="off" value="${esc(x.label)}" placeholder="예: 북측 발사 추정 지점">
+    <label for="ofNote">메모</label><textarea id="ofNote" rows="3" maxlength="1000">${esc(x.note || '')}</textarea>
+    <label>위치</label><span class="of-ll">${(+x.lat).toFixed(3)}, ${(+x.lng).toFixed(3)}</span>
+    <p class="note">사람은 객체로 만들 수 없어요. 공개된 장소와 시설만 다뤄요.</p>
+    <div class="inv-act"><button type="submit" class="btn">${init.id ? '고치기' : '추가하기'}</button><button type="button" class="btn" data-cancel="1">취소</button></div>`;
+  const close = () => f.remove();
+  f.querySelector('.close').addEventListener('click', close);
+  f.querySelector('[data-cancel]').addEventListener('click', close);
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    const label = $('ofName').value.trim(); if (!label) { $('ofName').focus(); return; }
+    const id = x.id || 'obj-' + Date.now().toString(36);
+    const obj = { id, k: 'obj', user: true, ot: $('ofType').value, label, note: $('ofNote').value.trim(), lat: +x.lat, lng: +x.lng, created: x.created || Date.now() };
+    S.extra.set(id, obj);
+    close(); emit();
+    logAct(init.id ? '객체 고치기' : '객체 추가', label);
+    openObj(obj);
+  });
+  $('app').append(f);
+  $('ofName').focus();
+}
+function deleteObj(id) {
+  const x = S.extra.get(id); if (!x) return;
+  if (!confirm(`객체 "${x.label}"과(와) 그 연결을 지울까요?`)) return;
+  S.extra.delete(id); S.links = S.links.filter(l => l.a !== id && l.b !== id);
+  clearTimeout(resumeTimer); resume(); emit();
+  logAct('객체 삭제', x.label);
+}
+function openObj(x) {
+  clearTimeout(resumeTimer); clearFx();
+  busy = true; ctl.autoRotate = false; currentId = x.id; currentFocus = { type: 'obj', place: x.label, lat: x.lat, lng: x.lng };
+  flyTo(x, 0.7);
+  const [tl, tc] = OBJ_TYPES[x.ot] || OBJ_TYPES.place;
+  const d = document.createElement('section');
+  d.className = 'dossier ev'; d.style.setProperty('--tc', tc);
+  const near = evList('all').filter(ev => isFinite(ev.lat) && distKm(x.lat, x.lng, ev.lat, ev.lng) <= 300).slice(0, 8);
+  const links = S.links.filter(l => l.a === x.id || l.b === x.id);
+  d.innerHTML = `<button class="close" type="button" aria-label="닫기">×</button><div class="kind">내 객체 · ${esc(tl)}</div><h3>${esc(x.label)}</h3>
+    <dl><dt>위치</dt><dd>${x.lat.toFixed(3)}, ${x.lng.toFixed(3)}</dd><dt>나라</dt><dd>${esc(evCountry(x))}</dd><dt>연결</dt><dd>${links.length}개</dd></dl>
+    ${x.note ? `<p class="obj-note">${esc(x.note)}</p>` : ''}
+    <div class="sa-row"><button type="button" class="btn" data-edit="1">고치기</button><button type="button" class="btn" data-del="1">지우기</button></div>
+    <div class="sec"><div class="sec-h"><span>반경 300km 사건</span><b>${near.length}</b></div><table class="tbl"><tbody>${near.map((ev, i) => `<tr class="go" data-i="${i}"><td><span class="sb" style="--tc:${tcol(ev.type)}">${esc(TYPE[ev.type]?.ko)}</span>${esc(ev.title)}</td><td class="st">${Math.round(distKm(x.lat, x.lng, ev.lat, ev.lng))}km</td></tr>`).join('') || '<tr><td class="none">근처에 사건이 없어요</td></tr>'}</tbody></table></div>`;
+  d.querySelectorAll('dt, dd').forEach(n => { n.style.opacity = 1; });
+  d.querySelector('.close').addEventListener('click', () => { clearTimeout(resumeTimer); resume(); });
+  d.querySelector('[data-edit]').addEventListener('click', () => objForm(x));
+  d.querySelector('[data-del]').addEventListener('click', () => deleteObj(x.id));
+  d.querySelectorAll('tr.go').forEach(tr => tr.addEventListener('click', () => openEvent(near[+tr.dataset.i], true)));
+  $('app').append(d); dossierEl = d;
+  appendLinkEditor(d, x.id);
+  d.querySelectorAll('.sec').forEach(n => { n.style.opacity = 1; });
+}
+
+// ---- user links ----
+function linkCandidates(id) {
+  const ids = new Set([...S.sel, ...S.extra.keys(), ...S.links.flatMap(l => [l.a, l.b])]);
+  const self = nodeOf(id);
+  if (self && isFinite(self.lat)) evList('all').filter(ev => distKm(self.lat, self.lng, ev.lat, ev.lng) <= 1500).slice(0, 25).forEach(ev => ids.add(ev.id));
+  ids.delete(id);
+  return [...ids].filter(nodeOf).map(k => ({ id: k, name: nodeName(k), obj: !EV.has(k) }));
+}
+function addUserLink(a, b, label) {
+  if (!a || !b || a === b) return false;
+  if (S.links.some(l => l.k === 'user' && ((l.a === a && l.b === b) || (l.a === b && l.b === a)))) return false;
+  S.links.push({ a, b, label: label || '관련', k: 'user' });
+  [a, b].forEach(id => EV.has(id) && S.sel.add(id));
+  emit(); logAct('연결 추가', `${nodeName(a)} — ${label || '관련'} — ${nodeName(b)}`);
+  return true;
+}
+function appendLinkEditor(d, id) {
+  const sec = document.createElement('div'); sec.className = 'sec work';
+  const draw = () => {
+    const mine = S.links.map((l, i) => ({ l, i })).filter(({ l }) => l.k === 'user' && (l.a === id || l.b === id));
+    const cand = linkCandidates(id);
+    sec.innerHTML = `<div class="sec-h"><span>내가 만든 연결</span><b>${mine.length}</b></div>
+      <ul class="wk-links">${mine.map(({ l, i }) => `<li><span>${esc(l.label)} → ${esc(nodeName(l.a === id ? l.b : l.a))}</span><button type="button" class="inv-del" data-rm="${i}" aria-label="연결 지우기">지우기</button></li>`).join('')}</ul>
+      <div class="wk-form"><label class="vh" for="lk-${esc(id)}">연결할 대상</label><select id="lk-${esc(id)}">${cand.map(c => `<option value="${esc(c.id)}">${c.obj ? '◆ ' : ''}${esc(c.name.slice(0, 50))}</option>`).join('') || '<option value="">연결할 대상이 없어요</option>'}</select>
+      <label class="vh" for="ll-${esc(id)}">관계</label><input id="ll-${esc(id)}" type="text" maxlength="30" placeholder="관계 (예: 원인, 같은 지역)" list="relList"><button type="button" class="btn" data-add="1"${cand.length ? '' : ' disabled'}>연결</button></div>`;
+    sec.querySelector('[data-add]').addEventListener('click', () => {
+      const b = sec.querySelector('select').value, lab = sec.querySelector('input').value.trim();
+      if (addUserLink(id, b, lab)) draw();
+    });
+    sec.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { S.links.splice(+btn.dataset.rm, 1); emit(); draw(); }));
+  };
+  draw();
+  d.append(sec);
+}
+
+// ---- notes on events ----
+function appendNote(d, ev) {
+  const sec = document.createElement('div'); sec.className = 'sec work';
+  sec.innerHTML = `<div class="sec-h"><label for="nt-${esc(ev.id)}">내 메모</label><b class="nt-s"></b></div><textarea id="nt-${esc(ev.id)}" class="wk-note" rows="3" maxlength="2000" placeholder="이 사건에 대한 판단이나 확인할 점">${esc(S.notes.get(ev.id) || '')}</textarea>`;
+  const ta = sec.querySelector('textarea');
+  let t = 0;
+  ta.addEventListener('input', () => {
+    const v = ta.value.trim(); v ? S.notes.set(ev.id, v) : S.notes.delete(ev.id);
+    clearTimeout(t); t = setTimeout(() => { sec.querySelector('.nt-s').textContent = '조사에 담김 · 저장을 누르면 보관돼요'; }, 400);
+  });
+  d.append(sec);
+}
+
+// ---- merge / split ----
+function mergeTargets(ev) {
+  return evList('all').filter(o => o.id !== ev.id && !o.mergedInto && isFinite(o.lat) && distKm(ev.lat, ev.lng, o.lat, o.lng) <= 1500 && Math.abs(o.updated - ev.updated) < 7 * 864e5)
+    .sort((a, b) => (a.type === ev.type ? 0 : 1) - (b.type === ev.type ? 0 : 1) || distKm(ev.lat, ev.lng, a.lat, a.lng) - distKm(ev.lat, ev.lng, b.lat, b.lng)).slice(0, 15);
+}
+function applyMerge(m) {
+  const into = EV.get(m.into), from = EV.get(m.from);
+  if (!into || !from) return;
+  from.mergedInto = into.id;
+  if (into._base == null) into._base = { sev: into.severity, sources: into.sources.slice(), start: into.start, updated: into.updated };
+  const have = new Set(into.signals.map(s => s.id));
+  from.signals.forEach(s => { if (!have.has(s.id)) into.signals.push({ ...s, mergedFrom: from.id }); });
+  into.signals.sort((a, b) => b.time - a.time);
+  into.sources = [...new Set(into.signals.map(s => s.src))];
+  into.start = Math.min(into.start, from.start); into.updated = Math.max(into.updated, from.updated);
+  into.severity = Math.max(into.severity, from.severity);
+  into.merged = S.merges.filter(x => x.into === into.id).map(x => x.from);
+}
+function mergeEvents(intoId, fromId) {
+  if (intoId === fromId || S.merges.some(m => m.from === fromId || m.from === intoId)) return;
+  // anything merged into "from" moves to "into"
+  S.merges.forEach(m => { if (m.into === fromId) m.into = intoId; });
+  S.merges.push({ into: intoId, from: fromId });
+  refreshMerges();
+  S.sel.delete(fromId); S.links.forEach(l => { if (l.a === fromId) l.a = intoId; if (l.b === fromId) l.b = intoId; });
+  emit(); logAct('사건 합치기', `${nodeName(fromId)} → ${nodeName(intoId)}`);
+}
+function splitEvent(fromId) {
+  S.merges = S.merges.filter(m => m.from !== fromId);
+  refreshMerges(); emit();
+  logAct('사건 분리', nodeName(fromId));
+}
+// rebuild merged views from scratch (also after live updates replace event objects)
+function refreshMerges() {
+  for (const ev of EV.values()) {
+    if (ev.mergedInto) delete ev.mergedInto;
+    if (ev._base) {
+      ev.signals = ev.signals.filter(s => !s.mergedFrom);
+      Object.assign(ev, { severity: ev._base.sev, sources: ev._base.sources, start: ev._base.start, updated: ev._base.updated });
+      delete ev._base; delete ev.merged;
+    }
+  }
+  S.merges.forEach(applyMerge);
+}
+function appendMerge(d, ev) {
+  const sec = document.createElement('div'); sec.className = 'sec work';
+  const merged = S.merges.filter(m => m.into === ev.id);
+  const cand = mergeTargets(ev);
+  sec.innerHTML = `<div class="sec-h"><span>같은 사건 합치기</span><b>${merged.length ? merged.length + '건 합침' : ''}</b></div>
+    ${merged.length ? `<ul class="wk-links">${merged.map(m => `<li><span>${esc(nodeName(m.from))}</span><button type="button" class="inv-del" data-split="${esc(m.from)}">분리</button></li>`).join('')}</ul>` : ''}
+    <p class="note">따로 잡힌 보도가 같은 일이라고 판단되면 이 사건으로 합쳐요. 언제든 분리할 수 있어요.</p>
+    <div class="wk-form"><label class="vh" for="mg-${esc(ev.id)}">합칠 사건</label><select id="mg-${esc(ev.id)}">${cand.map(o => `<option value="${esc(o.id)}">${esc(TYPE[o.type]?.ko || '')} · ${esc(o.title.slice(0, 46))} · ${Math.round(distKm(ev.lat, ev.lng, o.lat, o.lng))}km</option>`).join('') || '<option value="">근처에 합칠 사건이 없어요</option>'}</select><button type="button" class="btn" data-merge="1"${cand.length ? '' : ' disabled'}>합치기</button></div>`;
+  sec.querySelector('[data-merge]').addEventListener('click', () => {
+    const from = sec.querySelector('select').value; if (!from) return;
+    mergeEvents(ev.id, from); openEvent(EV.get(ev.id), true);
+  });
+  sec.querySelectorAll('[data-split]').forEach(b => b.addEventListener('click', () => { splitEvent(b.dataset.split); openEvent(EV.get(ev.id), true); }));
+  d.append(sec);
+}
+function appendWork(d, ev) {
+  appendNote(d, ev);
+  appendLinkEditor(d, ev.id);
+  appendMerge(d, ev);
 }
 
 // ================= LIVE DATA =================
@@ -2603,6 +2834,8 @@ addEventListener('keydown', k => {
   else if (k.key === 'n' || k.key === 'N') nextSignificant();
   else if (k.key === 'j' || k.key === 'J') fireMissile();
   else if (k.key === 'e' || k.key === 'E') $('eewTest').click();
+  else if (k.key === 'Escape' && pickMode) stopPick();
+  else if (k.key === 'Escape' && $('objForm')) $('objForm').remove();
   else if (k.key === 'Escape' && busy) { clearTimeout(resumeTimer); resume(); }
   else if (k.key === 'Escape' && S.app !== 'map') setApp('map');
   else if (k.key === 'Escape' && S.screen) setScreen(null);
