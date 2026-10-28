@@ -132,7 +132,7 @@ export function parseFeed(xml, feedName) {
 // ---------- polling ----------
 const keyOf = t => t.toLowerCase().replace(/[^a-z0-9가-힣]/g, '').slice(0, 48);
 
-export function createNews({ broadcast, status, log, UA, root }) {
+export function createNews({ broadcast, status, log, UA, root, onItem = () => {} }) {
   let feeds = DEFAULT_FEEDS;
   try {
     const custom = JSON.parse(fs.readFileSync(path.join(root, 'feeds.json'), 'utf8')).feeds;
@@ -174,12 +174,11 @@ export function createNews({ broadcast, status, log, UA, root }) {
       items.sort((a, b) => b.time - a.time);
       items.splice(200);
       // first load fills the list quietly; after that only recent items are announced
-      if (firstDone.has(f.name)) {
-        fresh.filter(it => it.time > Date.now() - 3 * 3600e3).sort((a, b) => a.time - b.time).forEach(it => {
-          log(`NEWS${it.flash ? ' (flash)' : ''}: [${it.place}] ${it.title}`);
-          broadcast('news', it);
-        });
-      }
+      fresh.sort((a, b) => a.time - b.time).forEach(it => {
+        const live = firstDone.has(f.name) && it.time > Date.now() - 3 * 3600e3;
+        if (live) { log(`NEWS${it.flash ? ' (flash)' : ''}: [${it.place}] ${it.title}`); broadcast('news', it); }
+        onItem(it, live);
+      });
       firstDone.add(f.name);
     } catch (e) {
       feedState[f.name] = 'error';
@@ -197,4 +196,12 @@ export function createNews({ broadcast, status, log, UA, root }) {
   }
 
   return { start, list: () => items, feeds: () => feeds.map(f => ({ name: f.name, state: feedState[f.name] || 'wait' })) };
+}
+
+// Gazetteer for the search box: every place with its names in both languages.
+export function placeList() {
+  return PLACES.map(([ko, en, lat, lng, kind]) => ({
+    ko: ko.split('|')[0].replace(/^!/, ''), en: en.split('|')[0],
+    names: [...ko.split('|').map(n => n.replace(/^!/, '')), ...en.split('|')], lat, lng, kind
+  }));
 }

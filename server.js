@@ -13,7 +13,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
-import { createNews } from './news.js';
+import { createNews, placeList } from './news.js';
+import { createIntel } from './intel.js';
+import { createEvents } from './events.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +32,7 @@ const DEMO = process.argv.includes('--demo') || process.env.DEMO === '1';
 const WINDY_KEY = process.env.WINDY_API_KEY || '';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const AIS_KEY = process.env.AISSTREAM_API_KEY || '';
 const HOSTED = !!(process.env.RENDER || process.env.HOST === '0.0.0.0');
 const HOST = process.env.HOST || (process.env.RENDER ? '0.0.0.0' : '127.0.0.1');
 // On a public site the paid AI briefing only runs with a password.
@@ -40,7 +43,7 @@ const UA = 'watchfloor-local/1.0 (personal OSINT dashboard)';
 const quakes = new Map();          // id -> event
 const alerts = [];                 // EEW / tsunami, newest first
 const seenP2P = new Set();
-const status = { usgs: 'wait', jma: 'wait', aircraft: 'idle', news: 'wait', webcams: WINDY_KEY ? 'ready' : 'off', ai: AI_ON ? 'ready' : 'off', aiNeedsPassword: !!ADMIN_PASSWORD, demo: DEMO };
+const status = { usgs: 'wait', jma: 'wait', aircraft: 'idle', news: 'wait', hazards: 'wait', sats: 'wait', ships: AIS_KEY ? 'wait' : 'off', webcams: WINDY_KEY ? 'ready' : 'off', ai: AI_ON ? 'ready' : 'off', aiNeedsPassword: !!ADMIN_PASSWORD, demo: DEMO };
 const clients = new Set();
 let news = null;              // set up after broadcast/log exist
 
@@ -50,7 +53,10 @@ function broadcast(type, data) {
 }
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
-news = createNews({ broadcast, status, log, UA, root: ROOT });
+const events = createEvents({ broadcast, log });
+news = createNews({ broadcast, status, log, UA, root: ROOT, onItem: (it, live) => events.ingest('news', it, live) });
+const intel = createIntel({ broadcast, status, log, UA, aisKey: AIS_KEY, onHazard: (h, live) => events.ingest('eonet', h, live) });
+const PLACES = placeList();
 
 async function getJSON(url, opts = {}, timeoutMs = 12000) {
   const ctl = new AbortController();
@@ -80,6 +86,7 @@ async function pollUSGS() {
       const ev = { id: 'us-' + f.id, src: 'usgs', mag: +(p.mag ?? 0), place: p.place || p.title, time: p.time, lat, lng, depth: Math.max(0, depth ?? 0), url: p.url, tsunami: !!p.tsunami, alert: p.alert || null };
       const old = quakes.get(ev.id);
       quakes.set(ev.id, ev);
+      if (!old) events.ingest('usgs', ev, !usgsFirst);
       if (!old && !usgsFirst) fresh.push(ev);
     }
     if (usgsFirst) log(`USGS: ${quakes.size} events loaded`);
@@ -121,6 +128,7 @@ async function pollP2P() {
           points: pts.slice(0, 8).map(p => ({ addr: p.addr, pref: p.pref, scale: SCALE[p.scale] || String(p.scale) }))
         };
         quakes.set(ev.id, ev);
+        events.ingest('jma', ev, !p2pFirst);
         if (!p2pFirst) { log(`JMA quake: M${ev.mag} ${ev.place} max ${ev.maxScale}`); broadcast('quake', ev); }
       } else if (it.code === 556) {
         const h = it.earthquake?.hypocenter || {};
@@ -130,10 +138,12 @@ async function pollP2P() {
           areas: (it.areas || []).slice(0, 12).map(x => ({ pref: x.pref, name: x.name, from: SCALE[x.scaleFrom] || '?', to: SCALE[x.scaleTo] || (x.scaleTo === 99 ? '이상' : '?'), arrival: x.arrivalTime ? jmaTime(x.arrivalTime) : null }))
         };
         alerts.unshift(a);
+        events.ingest('eew', a, !p2pFirst);
         if (!p2pFirst) { log(`EEW: ${a.place} M${a.mag}${a.cancelled ? ' (cancelled)' : ''}`); broadcast('eew', a); }
       } else if (it.code === 552) {
         const a = { id: 'tsu-' + key, kind: 'tsunami', cancelled: !!it.cancelled, time: jmaTime(it.time), areas: (it.areas || []).slice(0, 20).map(x => ({ name: x.name, grade: x.grade, immediate: !!x.immediate })) };
         alerts.unshift(a);
+        events.ingest('tsunami', a, !p2pFirst);
         if (!p2pFirst) { log(`Tsunami notice: ${a.areas.length} areas${a.cancelled ? ' (cancelled)' : ''}`); broadcast('tsunami', a); }
       }
     }
@@ -152,7 +162,7 @@ function loadSnapshot() {
   // In demo mode, slide the snapshot so its newest event is one hour old (keeps it inside the 7-day window).
   const newest = Math.max(...s.quakes.map(q => Date.parse(q.time)));
   const shift = DEMO ? Date.now() - 36e5 - newest : 0;
-  for (const q of s.quakes) quakes.set(q.id, { ...q, time: Date.parse(q.time) + shift });
+  for (const q of s.quakes) { const ev = { ...q, time: Date.parse(q.time) + shift }; quakes.set(q.id, ev); events.ingest(ev.src === 'jma' ? 'jma' : 'usgs', ev, false); }
   log(`Snapshot: ${s.quakes.length} events loaded`);
 }
 
@@ -254,7 +264,32 @@ async function aiBrief(payload, password) {
   const recent = [...quakes.values()].sort((a, b) => b.time - a.time).slice(0, 60)
     .map(q => `${new Date(q.time).toISOString().slice(0, 16)}Z | ${q.src} | M${q.mag} | ${q.place} | ${q.lat.toFixed(2)},${q.lng.toFixed(2)} | ${Math.round(q.depth)}km${q.maxScale ? ' | max shindo ' + q.maxScale : ''}`).join('\n');
   const al = alerts.slice(0, 10).map(a => `${new Date(a.time).toISOString().slice(0, 16)}Z | ${a.kind}${a.cancelled ? ' (cancelled)' : ''} | ${a.place || ''} ${a.mag ? 'M' + a.mag : ''} | areas: ${(a.areas || []).map(x => x.name || x.pref).slice(0, 8).join(', ')}`).join('\n');
-  const nw = news.list().slice(0, 25).map(n => `${new Date(n.time).toISOString().slice(0, 16)}Z | ${n.place} | ${n.outlet} | ${n.title}`).join('\n');
+  const nw = events.list().filter(ev => ev.type !== 'quake').sort((a, b) => b.severity - a.severity || b.updated - a.updated).slice(0, 30)
+    .map(ev => `${ev.id} | ${ev.typeKo} | 심각도 ${ev.severity}/5 | ${ev.place} | 출처 ${ev.sources.length}곳 | ${ev.title}`).join('\n');
+  let system = '당신은 지진·재난 상황실의 분석관입니다. 주어진 데이터만 근거로 한국어 브리핑을 씁니다. 뉴스 헤드라인은 보도된 내용으로만 다루고 사실로 단정하지 마세요. 데이터에 없는 피해나 사상자를 추측하지 마세요. 5~7개의 짧은 문단으로, 각 문단은 [개요] [주목 지역] [일본] [원전·인프라] [해양·쓰나미] [뉴스] [다음 확인할 것] 같은 꼬리표로 시작하세요. 마크다운 기호는 쓰지 마세요.';
+  let content = `현재 시각 ${new Date().toISOString()}.\n\n최근 지진 (최신순):\n${recent}\n\n최근 경보:\n${al || '없음'}\n\n최근 사건 (뉴스·재난, 위치는 자동 추정):\n${nw || '없음'}\n\n화면에서 사용자가 보고 있는 것: ${JSON.stringify(payload?.focus || null)}\n\n브리핑을 써 주세요.`;
+  const evq = payload?.eventId ? events.get(String(payload.eventId).slice(0, 80)) : null;
+  if (evq) {
+    const iso = t => new Date(t).toISOString().slice(0, 16) + 'Z';
+    const sigs = evq.signals.slice(0, 40).map(x => `${iso(x.time)} | ${x.src} | ${x.title}${x.desc ? ' | ' + String(x.desc).slice(0, 160) : ''}`).join('\n');
+    const around = events.near(evq.lat, evq.lng, 900).filter(e => e.id !== evq.id && Math.abs(e.updated - evq.updated) < 4 * 864e5).slice(0, 15)
+      .map(e => `${e.id} | ${e.typeKo} | 심각도 ${e.severity}/5 | ${e.place} | ${e.title}`).join('\n');
+    system = '당신은 정보 분석관입니다. 하나의 사건에 대해, 그 사건에 묶인 신호(공식 데이터와 기사 제목)만 근거로 한국어 사건 브리핑을 씁니다. 기사 제목은 보도된 내용으로만 다루고 사실로 단정하지 마세요. 데이터에 없는 사실, 피해 규모, 사상자를 지어내지 마세요. 4~6개의 짧은 문단으로, 각 문단은 [무슨 일] [출처와 신뢰도] [전개] [주변 연결] [확인할 것] 같은 꼬리표로 시작하세요. 마크다운 기호는 쓰지 마세요.';
+    content = `현재 시각 ${new Date().toISOString()}.\n사건 ${evq.id}: ${evq.typeKo} · ${evq.place} · 심각도 ${evq.severity}/5 · 상태 ${evq.status} · 시작 ${iso(evq.start)} · 최근 ${iso(evq.updated)} · 출처 ${evq.sources.join(', ')}\n\n신호 (최신순):\n${sigs}\n\n주변의 다른 사건:\n${around || '없음'}\n\n이 사건 브리핑을 써 주세요.`;
+  }
+  const rg = evq ? null : payload?.region;
+  if (rg && isFinite(+rg.lat) && isFinite(+rg.lng)) {
+    const lat = +rg.lat, lng = +rg.lng, rad = Math.min(2500, Math.max(100, +rg.radiusKm || 800));
+    const name = String(rg.name || '').slice(0, 60);
+    const iso = t => new Date(t).toISOString().slice(0, 16) + 'Z';
+    const near = x => distKm(lat, lng, x.lat, x.lng) <= rad;
+    const rq = [...quakes.values()].filter(near).sort((a, b) => b.time - a.time).slice(0, 30).map(q => `${iso(q.time)} | M${q.mag} | ${q.place} | ${Math.round(distKm(lat, lng, q.lat, q.lng))}km`).join('\n');
+    const rn = events.near(lat, lng, rad).filter(e => e.type !== 'quake').sort((a, b) => b.updated - a.updated).slice(0, 30).map(e => `${iso(e.updated)} | ${e.typeKo} | 심각도 ${e.severity}/5 | ${e.place} | 출처 ${e.sources.length}곳 | ${e.title}`).join('\n');
+    const rh = intel.hazards().filter(near).slice(0, 15).map(h => `${iso(h.time)} | ${h.catKo} | ${h.title}`).join('\n');
+    const links = (Array.isArray(payload.links) ? payload.links : []).slice(0, 30).map(x => String(x).slice(0, 120)).join('\n');
+    system = '당신은 정보 분석관입니다. 한 지역에 대해 주어진 데이터만 근거로 한국어 지역 브리핑을 씁니다. 뉴스 헤드라인은 보도된 내용으로만 다루고 사실로 단정하지 마세요. 데이터에 없는 사실을 지어내지 마세요. 4~6개의 짧은 문단으로, 각 문단은 [요약] [지진·재난] [뉴스 흐름] [인프라·교통] [연결 고리] [주의할 점] 같은 꼬리표로 시작하세요. 데이터가 없는 항목은 짧게 없다고 쓰세요. 마크다운 기호는 쓰지 마세요.';
+    content = `현재 시각 ${new Date().toISOString()}.\n지역: ${name} (${lat.toFixed(2)}, ${lng.toFixed(2)}), 반경 ${rad}km\n\n지진:\n${rq || '없음'}\n\n사건 (뉴스·재난, 위치 자동 추정):\n${rn || '없음'}\n\n자연재해 (NASA EONET):\n${rh || '없음'}\n\n화면에서 연결된 항목:\n${links || '없음'}\n\n이 지역 브리핑을 써 주세요.`;
+  }
   try {
     const r = await anthropic.beta.messages.create({
       model: 'claude-opus-5-5',
@@ -262,8 +297,8 @@ async function aiBrief(payload, password) {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: '당신은 지진·재난 상황실의 분석관입니다. 주어진 데이터만 근거로 한국어 브리핑을 씁니다. 뉴스 헤드라인은 보도된 내용으로만 다루고 사실로 단정하지 마세요. 데이터에 없는 피해나 사상자를 추측하지 마세요. 5~7개의 짧은 문단으로, 각 문단은 [개요] [주목 지역] [일본] [원전·인프라] [해양·쓰나미] [뉴스] [다음 확인할 것] 같은 꼬리표로 시작하세요. 마크다운 기호는 쓰지 마세요.',
-      messages: [{ role: 'user', content: `현재 시각 ${new Date().toISOString()}.\n\n최근 지진 (최신순):\n${recent}\n\n최근 경보:\n${al || '없음'}\n\n최근 뉴스 헤드라인 (위치 자동 추정):\n${nw || '없음'}\n\n화면에서 사용자가 보고 있는 것: ${JSON.stringify(payload?.focus || null)}\n\n브리핑을 써 주세요.` }]
+      system,
+      messages: [{ role: 'user', content }]
     });
     if (r.stop_reason === 'refusal') return { status: 200, body: { text: '모델이 이 요청에 답하지 않았어요. 잠시 뒤 다시 시도해 주세요.' } };
     const text = r.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
@@ -285,7 +320,7 @@ const server = http.createServer(async (req, res) => {
   const p = u.pathname;
   try {
     if (p === '/api/state') {
-      return send(res, 200, { quakes: [...quakes.values()].sort((a, b) => a.time - b.time), alerts, news: news.list().slice(0, 120), status, now: Date.now() });
+      return send(res, 200, { quakes: [...quakes.values()].sort((a, b) => a.time - b.time), alerts, events: events.list(), hazards: intel.hazards(), status, now: Date.now() });
     }
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -309,6 +344,12 @@ const server = http.createServer(async (req, res) => {
       const r = await aiBrief(await readBody(req), req.headers['x-admin-password'] || '');
       return send(res, r.status, r.body);
     }
+    if (p === '/api/events') return send(res, 200, { events: events.list() });
+    if (p.startsWith('/api/events/')) { const ev = events.get(decodeURIComponent(p.slice(12))); return ev ? send(res, 200, ev) : send(res, 404, { error: '사건을 찾지 못했어요' }); }
+    if (p === '/api/sats') return send(res, 200, { sats: intel.sats() });
+    if (p === '/api/ships') return send(res, 200, { ships: intel.ships(), on: !!AIS_KEY });
+    if (p === '/api/hazards') return send(res, 200, { hazards: intel.hazards() });
+    if (p === '/api/places') return send(res, 200, { places: PLACES });
     if (p === '/api/news') return send(res, 200, { news: news.list(), feeds: news.feeds() });
     if (p === '/api/health') return send(res, 200, { ok: true });
     // static
@@ -341,9 +382,10 @@ server.on('error', e => {
   process.exit(1);
 });
 
-if (DEMO) { loadSnapshot(); status.usgs = 'snapshot'; status.jma = 'off'; status.aircraft = 'off'; status.news = 'off'; }
+if (DEMO) { loadSnapshot(); status.usgs = 'snapshot'; status.jma = 'off'; status.aircraft = 'off'; status.news = 'off'; status.hazards = 'off'; status.sats = 'off'; status.ships = 'off'; }
 else {
   pollUSGS(); setInterval(pollUSGS, 60000);
   pollP2P(); setInterval(pollP2P, 15000);
-  news.start(180000);
+  setTimeout(() => news.start(180000), 8000); // quakes first, so quake stories can join their quake
+  intel.start();
 }
