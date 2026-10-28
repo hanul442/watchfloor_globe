@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
+import { createNews } from './news.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,14 +40,17 @@ const UA = 'watchfloor-local/1.0 (personal OSINT dashboard)';
 const quakes = new Map();          // id -> event
 const alerts = [];                 // EEW / tsunami, newest first
 const seenP2P = new Set();
-const status = { usgs: 'wait', jma: 'wait', aircraft: 'idle', webcams: WINDY_KEY ? 'ready' : 'off', ai: AI_ON ? 'ready' : 'off', aiNeedsPassword: !!ADMIN_PASSWORD, demo: DEMO };
+const status = { usgs: 'wait', jma: 'wait', aircraft: 'idle', news: 'wait', webcams: WINDY_KEY ? 'ready' : 'off', ai: AI_ON ? 'ready' : 'off', aiNeedsPassword: !!ADMIN_PASSWORD, demo: DEMO };
 const clients = new Set();
+let news = null;              // set up after broadcast/log exist
 
 function broadcast(type, data) {
   const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) res.write(msg);
 }
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+news = createNews({ broadcast, status, log, UA, root: ROOT });
 
 async function getJSON(url, opts = {}, timeoutMs = 12000) {
   const ctl = new AbortController();
@@ -250,6 +254,7 @@ async function aiBrief(payload, password) {
   const recent = [...quakes.values()].sort((a, b) => b.time - a.time).slice(0, 60)
     .map(q => `${new Date(q.time).toISOString().slice(0, 16)}Z | ${q.src} | M${q.mag} | ${q.place} | ${q.lat.toFixed(2)},${q.lng.toFixed(2)} | ${Math.round(q.depth)}km${q.maxScale ? ' | max shindo ' + q.maxScale : ''}`).join('\n');
   const al = alerts.slice(0, 10).map(a => `${new Date(a.time).toISOString().slice(0, 16)}Z | ${a.kind}${a.cancelled ? ' (cancelled)' : ''} | ${a.place || ''} ${a.mag ? 'M' + a.mag : ''} | areas: ${(a.areas || []).map(x => x.name || x.pref).slice(0, 8).join(', ')}`).join('\n');
+  const nw = news.list().slice(0, 25).map(n => `${new Date(n.time).toISOString().slice(0, 16)}Z | ${n.place} | ${n.outlet} | ${n.title}`).join('\n');
   try {
     const r = await anthropic.beta.messages.create({
       model: 'claude-opus-5-5',
@@ -257,8 +262,8 @@ async function aiBrief(payload, password) {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: '당신은 지진·재난 상황실의 분석관입니다. 주어진 데이터만 근거로 한국어 브리핑을 씁니다. 데이터에 없는 피해나 사상자를 추측하지 마세요. 5~7개의 짧은 문단으로, 각 문단은 [개요] [주목 지역] [일본] [원전·인프라] [해양·쓰나미] [다음 확인할 것] 같은 꼬리표로 시작하세요. 마크다운 기호는 쓰지 마세요.',
-      messages: [{ role: 'user', content: `현재 시각 ${new Date().toISOString()}.\n\n최근 지진 (최신순):\n${recent}\n\n최근 경보:\n${al || '없음'}\n\n화면에서 사용자가 보고 있는 것: ${JSON.stringify(payload?.focus || null)}\n\n브리핑을 써 주세요.` }]
+      system: '당신은 지진·재난 상황실의 분석관입니다. 주어진 데이터만 근거로 한국어 브리핑을 씁니다. 뉴스 헤드라인은 보도된 내용으로만 다루고 사실로 단정하지 마세요. 데이터에 없는 피해나 사상자를 추측하지 마세요. 5~7개의 짧은 문단으로, 각 문단은 [개요] [주목 지역] [일본] [원전·인프라] [해양·쓰나미] [뉴스] [다음 확인할 것] 같은 꼬리표로 시작하세요. 마크다운 기호는 쓰지 마세요.',
+      messages: [{ role: 'user', content: `현재 시각 ${new Date().toISOString()}.\n\n최근 지진 (최신순):\n${recent}\n\n최근 경보:\n${al || '없음'}\n\n최근 뉴스 헤드라인 (위치 자동 추정):\n${nw || '없음'}\n\n화면에서 사용자가 보고 있는 것: ${JSON.stringify(payload?.focus || null)}\n\n브리핑을 써 주세요.` }]
     });
     if (r.stop_reason === 'refusal') return { status: 200, body: { text: '모델이 이 요청에 답하지 않았어요. 잠시 뒤 다시 시도해 주세요.' } };
     const text = r.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
@@ -280,7 +285,7 @@ const server = http.createServer(async (req, res) => {
   const p = u.pathname;
   try {
     if (p === '/api/state') {
-      return send(res, 200, { quakes: [...quakes.values()].sort((a, b) => a.time - b.time), alerts, status, now: Date.now() });
+      return send(res, 200, { quakes: [...quakes.values()].sort((a, b) => a.time - b.time), alerts, news: news.list().slice(0, 120), status, now: Date.now() });
     }
     if (p === '/api/stream') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -304,6 +309,7 @@ const server = http.createServer(async (req, res) => {
       const r = await aiBrief(await readBody(req), req.headers['x-admin-password'] || '');
       return send(res, r.status, r.body);
     }
+    if (p === '/api/news') return send(res, 200, { news: news.list(), feeds: news.feeds() });
     if (p === '/api/health') return send(res, 200, { ok: true });
     // static
     let fp = path.normalize(path.join(ROOT, 'public', p === '/' ? 'index.html' : decodeURIComponent(p)));
@@ -335,8 +341,9 @@ server.on('error', e => {
   process.exit(1);
 });
 
-if (DEMO) { loadSnapshot(); status.usgs = 'snapshot'; status.jma = 'off'; status.aircraft = 'off'; }
+if (DEMO) { loadSnapshot(); status.usgs = 'snapshot'; status.jma = 'off'; status.aircraft = 'off'; status.news = 'off'; }
 else {
   pollUSGS(); setInterval(pollUSGS, 60000);
   pollP2P(); setInterval(pollP2P, 15000);
+  news.start(180000);
 }
