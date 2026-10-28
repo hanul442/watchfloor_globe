@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watchfloor Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=JetBrains+Mono:wght@400;600&family=Chakra+Petch:wght@600&display=swap">
+<style>body{margin:0;font-size:14px;-webkit-font-smoothing:antialiased}[hidden]{display:none!important}</style>
+<style>
+/* Layout: full-bleed globe. Left rail = feed / briefing / layers. Right = alert dossier + camera. Bottom = event timeline. Single dark look by choice. */
+:root {
+  --bg: #05080d;
+  --panel: rgba(9, 15, 24, 0.86);
+  --line: #1c2a3b;
+  --fg: #d6e2ee;
+  --muted: #7a8ea3;
+  --accent: #f0b43c;
+  --crit: #ff4d3d;
+  --ok: #58c4a8;
+  --cyan: #46d6e8;
+  --nuke: #c6f05a;
+  --f-display: "Chakra Petch", "IBM Plex Sans KR", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans KR", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --gl: max(16px, env(safe-area-inset-left, 0px));
+  --gr: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); overflow: hidden; }
+#app { position: relative; height: 100%; }
+#globe { position: absolute; inset: 0; }
+#globe canvas { display: block; }
+.rail, .dossier, .cam, .timeline { box-sizing: border-box; }
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- top bar ---------- */
+.topbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding-block: 12px; padding-left: var(--gl); padding-right: var(--gr);
+  background: linear-gradient(var(--bg), transparent);
+}
+.brand { font-family: var(--f-display); letter-spacing: .18em; font-size: 15px; text-transform: uppercase; }
+.brand b { color: var(--accent); font-weight: 600; }
+.brand small { font: 400 10px var(--f-mono); color: var(--muted); letter-spacing: .1em; margin-left: 6px; }
+.clock { font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 14px; }
+.clock b { color: var(--fg); font-weight: 400; }
+.idx { display: flex; align-items: center; gap: 8px; font: 11px var(--f-mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; background: rgba(9,15,24,.7); }
+.idx .bar { width: 70px; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.idx .bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .8s, background .8s; }
+.idx b { font-size: 13px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.idx .lv { font-weight: 600; letter-spacing: .08em; }
+.spacer { flex: 1; }
+.btn { font: 600 12px var(--f-body); color: var(--fg); background: rgba(20, 32, 48, .8); border: 1px solid var(--line); border-radius: 4px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.warn { border-color: rgba(255, 77, 61, .6); color: #ffd2cc; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn kbd { font: 10px var(--f-mono); color: var(--muted); margin-left: 6px; }
+
+/* ---------- left rail ---------- */
+.rail {
+  position: absolute; z-index: 4; left: var(--gl); top: 64px; bottom: 92px; width: 310px;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
+}
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: 600 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; padding: 11px 8px 9px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tabs .live { color: var(--ok); }
+.tabs .live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: middle; animation: blink 1.6s infinite; }
+.tabs .live.paused { color: var(--muted); }
+.tabs .live.paused::before { background: var(--muted); animation: none; }
+.stats { display: flex; gap: 16px; padding: 10px 14px; font: 11px var(--f-mono); color: var(--muted); border-bottom: 1px solid var(--line); }
+.stats b { color: var(--fg); font-weight: 600; font-size: 13px; display: block; }
+.pane { flex: 1; min-height: 0; overflow-y: auto; }
+.feed { list-style: none; margin: 0; padding: 4px 6px 8px; }
+.feed li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: start; padding: 8px; border-radius: 4px; cursor: pointer; border-left: 2px solid transparent; }
+.feed li:hover, .feed li:focus-visible { background: rgba(255,255,255,.04); outline: none; }
+.feed li.sev-crit { border-left-color: var(--crit); }
+.feed li.sev-high { border-left-color: var(--accent); }
+.feed li.new { animation: slidein .5s ease-out; }
+.mag { font: 600 15px var(--f-mono); font-variant-numeric: tabular-nums; }
+.sev-crit .mag { color: var(--crit); }
+.sev-high .mag { color: var(--accent); }
+.feed .place { font-size: 13px; line-height: 1.35; }
+.feed .meta { font: 11px var(--f-mono); color: var(--muted); margin-top: 2px; }
+.brief { padding: 12px 14px 14px; font-size: 13px; line-height: 1.65; }
+.brief .stamp { font: 11px var(--f-mono); color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+.brief p { margin: 0 0 10px; }
+.brief p b { color: var(--accent); font-weight: 600; }
+.brief .tag { display: inline-block; font: 600 10px var(--f-mono); letter-spacing: .08em; padding: 1px 6px; border-radius: 3px; margin-right: 6px; vertical-align: 1px; border: 1px solid currentColor; }
+.brief .t-q { color: var(--accent); } .brief .t-n { color: var(--nuke); } .brief .t-s { color: var(--cyan); } .brief .t-m { color: var(--crit); }
+.layers { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+.layers .lbl { width: 100%; font: 600 10px var(--f-mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.chip { font: 600 11px var(--f-body); color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .5; }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: #2c4058; }
+.chip[aria-pressed="true"] i { opacity: 1; background: var(--c); }
+.keys { padding: 8px 14px 12px; font: 10px var(--f-mono); color: var(--muted); border-top: 1px solid var(--line); line-height: 1.7; }
+.keys kbd { color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+/* ---------- alerts ---------- */
+.banner {
+  position: absolute; z-index: 7; left: 50%; top: 70px; transform: translateX(-50%);
+  font: 600 13px var(--f-display); letter-spacing: .2em; text-transform: uppercase; white-space: nowrap;
+  padding: 8px 18px; border: 1px solid var(--crit); color: #fff; background: rgba(120, 18, 10, .78);
+  animation: flash .5s steps(2) 4;
+}
+.banner.high { border-color: var(--accent); background: rgba(110, 72, 8, .78); }
+.flash-edge { position: absolute; inset: 0; z-index: 3; pointer-events: none; box-shadow: inset 0 0 140px rgba(255, 50, 30, .5); animation: fade 2.6s ease-out forwards; }
+.scan { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(transparent 0, rgba(70,214,232,.10) 50%, transparent 100%); height: 30%; animation: sweep 1.4s ease-in-out 1; opacity: 0; }
+
+.dossier {
+  position: absolute; z-index: 5; right: var(--gr); top: 64px; width: 350px; max-height: calc(100% - 64px - 92px);
+  overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--crit); border-radius: 6px;
+  backdrop-filter: blur(6px); padding: 14px 16px 16px; animation: dossierIn .45s cubic-bezier(.2,.8,.2,1);
+}
+.dossier.high { border-top-color: var(--accent); }
+.dossier.low { border-top-color: #9fd3ff; }
+.dossier .kind { font: 600 11px var(--f-mono); letter-spacing: .14em; color: var(--crit); text-transform: uppercase; }
+.dossier.high .kind { color: var(--accent); }
+.dossier.low .kind { color: #9fd3ff; }
+.dossier h3 { margin: 6px 28px 12px 0; font: 600 19px/1.3 var(--f-body); text-wrap: balance; }
+.dossier dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: 13px; }
+.dossier dt { color: var(--muted); font-size: 12px; }
+.dossier dd { margin: 0; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.dossier dt, .dossier dd { opacity: 0; animation: rowIn .25s ease-out forwards; }
+.dossier .note { margin: 10px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.dossier .demo { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; font-size: 10px; }
+.sec { margin-top: 14px; opacity: 0; animation: rowIn .3s ease-out forwards; }
+.sec-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font: 600 11px var(--f-mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.sec-h b { color: var(--fg); font-variant-numeric: tabular-nums; letter-spacing: 0; font-size: 13px; }
+.sec-h.n { color: var(--nuke); } .sec-h.t { color: var(--cyan); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { text-align: left; font: 400 10px var(--f-mono); color: var(--muted); padding: 4px 4px 4px 0; letter-spacing: .08em; }
+.tbl td { padding: 6px 4px 6px 0; border-top: 1px solid var(--line); font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl td:first-child { font-family: var(--f-body); white-space: normal; }
+.tbl .none { color: var(--muted); font-family: var(--f-body); white-space: normal; }
+.shindo { display: inline-block; min-width: 26px; text-align: center; padding: 1px 4px; border-radius: 3px; font-weight: 600; color: #0b1018; }
+.st { color: var(--muted); }
+.st.s { color: var(--accent); }
+.st.hit { color: var(--crit); font-weight: 600; animation: flash .4s steps(2) 3; }
+.countdown { font: 600 28px var(--f-mono); font-variant-numeric: tabular-nums; color: var(--crit); letter-spacing: .04em; }
+.close { position: absolute; top: 8px; right: 8px; background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; }
+
+.cam {
+  position: absolute; z-index: 5; top: 120px; right: calc(var(--gr) + 362px); width: 290px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
+  padding: 10px; animation: dossierIn .45s cubic-bezier(.2,.8,.2,1);
+}
+.cam .hd { display: flex; justify-content: space-between; font: 600 11px var(--f-mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.cam .hd .rec { color: var(--crit); animation: blink 1.2s infinite; }
+.cam .view { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #000; border-radius: 3px; overflow: hidden; }
+.cam canvas { width: 100%; height: 100%; display: block; opacity: .55; }
+.cam .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; font: 11px var(--f-mono); color: #e6eef6; text-shadow: 0 1px 2px #000; }
+.cam .ovl .mid { align-self: center; text-align: center; font-size: 12px; line-height: 1.5; }
+.cam .links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.cam .links a { flex: 1; text-align: center; font: 600 12px var(--f-body); color: var(--fg); text-decoration: none; border: 1px solid var(--line); border-radius: 4px; padding: 7px 8px; background: rgba(20, 32, 48, .8); }
+.cam .links a:hover, .cam .links a:focus-visible { border-color: var(--accent); outline: none; }
+
+.reticle { pointer-events: none; transform: translate(-50%, -50%); }
+.reticle .box { width: 46px; height: 46px; border: 1px solid var(--crit); position: relative; animation: lock .6s ease-out; }
+.reticle .box::before, .reticle .box::after { content: ""; position: absolute; background: var(--crit); }
+.reticle .box::before { left: 50%; top: -10px; bottom: -10px; width: 1px; opacity: .5; }
+.reticle .box::after { top: 50%; left: -10px; right: -10px; height: 1px; opacity: .5; }
+.reticle.high .box { border-color: var(--accent); }
+.reticle.high .box::before, .reticle.high .box::after { background: var(--accent); }
+.reticle.low .box { border-color: #9fd3ff; }
+.reticle .tag { position: absolute; left: 56px; top: 0; white-space: nowrap; font: 600 11px var(--f-mono); color: #fff; background: rgba(0,0,0,.6); padding: 2px 6px; }
+
+/* ---------- timeline ---------- */
+.timeline {
+  position: absolute; z-index: 4; left: var(--gl); right: var(--gr); bottom: max(16px, env(safe-area-inset-bottom, 0px)); height: 62px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
+  display: flex; align-items: stretch; gap: 16px; padding: 8px 14px;
+}
+.tl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tl-axis { display: flex; justify-content: space-between; font: 10px var(--f-mono); color: var(--muted); }
+.tl-track { position: relative; flex: 1; border-bottom: 1px solid var(--line); margin-top: 4px; }
+.tl-track button { position: absolute; bottom: 0; width: 9px; margin-left: -4px; padding: 0; border: 0; background: none; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; height: 100%; }
+.tl-track button i { display: block; width: 3px; border-radius: 1px; background: #3a5068; transition: background .3s; }
+.tl-track button.on i { background: #9fd3ff; }
+.tl-track button.on.sev-high i { background: var(--accent); }
+.tl-track button.on.sev-crit i { background: var(--crit); }
+.tl-track button.cur i { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.tl-head { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--cyan); transition: left .6s; pointer-events: none; }
+.tl-head::after { content: ""; position: absolute; top: -3px; left: -3px; width: 7px; height: 7px; background: var(--cyan); transform: rotate(45deg); }
+.legend { display: flex; flex-direction: column; justify-content: center; gap: 6px; font: 10px var(--f-mono); color: var(--muted); border-left: 1px solid var(--line); padding-left: 14px; }
+.legend .row { display: flex; gap: 12px; align-items: center; }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 5px; }
+.legend .sc { display: flex; gap: 2px; }
+.legend .sc span { width: 18px; text-align: center; color: #0b1018; font-weight: 600; border-radius: 2px; }
+
+/* ---------- boot ---------- */
+.boot { position: absolute; inset: 0; z-index: 20; background: var(--bg); display: flex; align-items: center; justify-content: center; padding-left: var(--gl); padding-right: var(--gr); cursor: pointer; transition: opacity .6s; }
+.boot.out { opacity: 0; pointer-events: none; }
+.boot pre { margin: 0; font: 13px/1.9 var(--f-mono); color: var(--muted); white-space: pre-wrap; max-width: 520px; width: 100%; }
+.boot pre b { color: var(--ok); font-weight: 600; }
+.boot pre em { color: var(--accent); font-style: normal; }
+.boot pre .h { font-family: var(--f-display); font-size: 20px; letter-spacing: .2em; color: var(--fg); }
+
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes slidein { from { transform: translateX(-12px); opacity: 0; } }
+@keyframes flash { 50% { opacity: .2; } }
+@keyframes fade { to { opacity: 0; } }
+@keyframes sweep { 0% { top: -30%; opacity: 1; } 100% { top: 100%; opacity: 1; } }
+@keyframes dossierIn { from { transform: translateX(24px); opacity: 0; } }
+@keyframes rowIn { from { transform: translateY(4px); } to { opacity: 1; } }
+@keyframes lock { from { transform: scale(2.4); opacity: 0; } }
+
+@media (max-width: 1280px) {
+  .cam { top: auto; bottom: 92px; right: var(--gr); }
+  .dossier { max-height: calc(100% - 64px - 92px - 250px); }
+}
+@media (max-width: 1100px) { .legend { display: none; } .idx .bar { display: none; } }
+@media (max-width: 760px) {
+  .rail { top: auto; bottom: 86px; height: 30%; width: auto; right: var(--gr); }
+  .dossier { top: auto; bottom: 86px; left: var(--gl); width: auto; max-height: 44%; z-index: 6; }
+  .cam { display: none; }
+  .timeline { height: 56px; }
+  .clock .utc, .brand small, .btn kbd, .keys { display: none; }
+  .banner { font-size: 11px; top: 100px; }
+  .topbar { gap: 8px 10px; }
+  .btn { padding: 6px 9px; font-size: 11px; }
+  #sound, .idx > span:first-child { display: none; }
+  .layers { flex-wrap: nowrap; overflow-x: auto; }
+  .layers .lbl { display: none; }
+  .chip { flex: none; }
+  .stats { gap: 12px; padding: 8px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+}
+
+/* ---------- local-version additions ---------- */
+.srcs { display: flex; gap: 10px; font: 10px var(--f-mono); color: var(--muted); letter-spacing: .06em; }
+.srcs span::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; background: #3a5068; }
+.srcs span[data-s="ok"]::before, .srcs span[data-s="ready"]::before { background: var(--ok); }
+.srcs span[data-s="snapshot"]::before, .srcs span[data-s="wait"]::before { background: var(--accent); }
+.srcs span[data-s="error"]::before { background: var(--crit); }
+.banner.cyan { border-color: var(--cyan); background: rgba(8, 70, 84, .82); }
+.dossier.cyan { border-top-color: var(--cyan); }
+.dossier.cyan .kind { color: var(--cyan); }
+.cam.video { width: 380px; }
+.cam .view iframe, .cam .view img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
+.cam .alts { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.cam .alts button { font: 11px var(--f-body); color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam .alts button[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.cam .meta { font: 11px var(--f-mono); color: var(--muted); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai { margin: 4px 0 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ai .btn { padding: 6px 10px; }
+.ai small { color: var(--muted); font-size: 11px; }
+.ai-out { border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.65; background: rgba(255,255,255,.02); }
+.ai-out .lab { display: block; font: 600 10px var(--f-mono); letter-spacing: .12em; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; }
+.feed .src-tag { font: 600 9px var(--f-mono); letter-spacing: .08em; border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 5px; color: var(--muted); }
+.feed .src-tag.jma { color: #ff9b8a; border-color: rgba(255,120,100,.4); }
+.feed .src-tag.eew { color: var(--crit); border-color: var(--crit); }
+.feed .src-tag.tsu { color: var(--cyan); border-color: var(--cyan); }
+@media (max-width: 1100px) { .srcs { display: none; } }
+</style>
+
+</head>
+<body>
+<div id="app">
+  <div id="globe" aria-label="실시간 경보 지구본"></div>
+
+  <div class="topbar">
+    <div class="brand"><b>◢</b> Watchfloor<small>LIVE</small></div>
+    <div class="clock"><span class="utc">UTC <b id="utc">--:--:--</b></span><span>KST <b id="kst">--:--:--</b></span></div>
+    <div class="idx" title="최근 48시간 지진 규모로 계산한 자체 활동 지수예요"><span>활동 지수</span><span class="bar"><i id="idxBar"></i></span><b id="idxVal">0</b><span class="lv" id="idxLv">안정</span></div>
+    <div class="srcs" id="srcs"><span data-k="usgs">USGS</span><span data-k="jma">JMA</span><span data-k="aircraft">항공</span><span data-k="webcams">웹캠</span><span data-k="ai">AI</span></div>
+    <div class="spacer"></div>
+    <button class="btn" id="pause" aria-pressed="false" type="button">자동 이동 끄기<kbd>Space</kbd></button>
+    <button class="btn" id="next" type="button">다음 경보<kbd>N</kbd></button>
+    <button class="btn warn" id="eewTest" type="button">속보 테스트<kbd>E</kbd></button>
+    <button class="btn warn" id="jalert" type="button">J-Alert 데모<kbd>J</kbd></button>
+    <button class="btn" id="sound" aria-pressed="false" type="button">소리 켜기</button>
+  </div>
+
+  <aside class="rail">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabFeed" aria-selected="true" aria-controls="paneFeed" type="button"><span class="live" id="liveDot">실시간 피드</span></button>
+      <button role="tab" id="tabBrief" aria-selected="false" aria-controls="paneBrief" type="button">상황 브리핑</button>
+    </div>
+    <div class="stats"><span><b id="stCount">0</b>7일 이벤트</span><span><b id="stMax">-</b>최대 규모</span><span><b id="stCrit">0</b>주요 경보</span><span><b id="stNuke">0</b>원전 근접</span></div>
+    <div class="pane" id="paneFeed" role="tabpanel"><ul class="feed" id="feed"></ul></div>
+    <div class="pane" id="paneBrief" role="tabpanel" hidden>
+      <div class="brief">
+        <div class="ai" id="aiRow"><input id="aiPw" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="AI 분석 비밀번호" hidden style="font:13px var(--f-body);background:rgba(20,32,48,.8);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;width:110px"><button class="btn" id="aiBtn" type="button">Claude 분석 요청</button><small id="aiNote"></small></div>
+        <div id="aiOut"></div>
+        <div id="brief"></div>
+      </div>
+    </div>
+    <div class="layers" id="layers"><span class="lbl">레이어</span></div>
+    <div class="keys"><kbd>Space</kbd> 자동 이동 · <kbd>N</kbd> 다음 · <kbd>E</kbd> 속보 테스트 · <kbd>J</kbd> 미사일 데모 · <kbd>1</kbd>–<kbd>6</kbd> 레이어 · <kbd>Esc</kbd> 닫기</div>
+  </aside>
+
+  <div class="timeline">
+    <div class="tl-main">
+      <div class="tl-axis"><span id="tlStart"></span><span id="tlMid">최근 7일 · 막대 높이 = 규모</span><span id="tlEnd">지금</span></div>
+      <div class="tl-track" id="tlTrack"><div class="tl-head" id="tlHead" style="left:100%"></div></div>
+    </div>
+    <div class="legend" aria-label="범례">
+      <div class="row"><span><i style="background:#7cc0ff"></i>P파</span><span><i style="background:#ff5a3c"></i>S파</span><span><i style="background:#46d6e8"></i>쓰나미</span><span><i style="background:#f4f8ff"></i>항공기</span></div>
+      <div class="row"><span>진도</span><span class="sc" id="scale"></span></div>
+    </div>
+  </div>
+
+  <div class="boot" id="boot"><pre id="bootLog"></pre></div>
+</div>
+
+<script src="vendor/globe.gl.min.js"></script>
+<script>
+// ================= REFERENCE DATA =================
+// [ko, en, lat, lng, coastal]
+const CITIES = [['서울','Seoul',37.57,126.98,0],['부산','Busan',35.18,129.08,1],['평양','Pyongyang',39.03,125.75,0],['도쿄','Tokyo',35.68,139.69,1],['요코하마','Yokohama',35.44,139.64,1],['나고야','Nagoya',35.18,136.91,1],['오사카','Osaka',34.69,135.50,1],['와카야마','Wakayama',34.23,135.17,1],['고베','Kobe',34.69,135.20,1],['교토','Kyoto',35.01,135.77,0],['히로시마','Hiroshima',34.39,132.46,1],['고치','Kochi',33.56,133.53,1],['후쿠오카','Fukuoka',33.59,130.40,1],['구마모토','Kumamoto',32.80,130.71,0],['삿포로','Sapporo',43.06,141.35,1],['센다이','Sendai',38.27,140.87,1],['니가타','Niigata',37.92,139.04,1],['가나자와','Kanazawa',36.56,136.66,1],['미야자키','Miyazaki',31.91,131.42,1],['가고시마','Kagoshima',31.60,130.56,1],['나하','Naha',26.21,127.68,1],['하치조지마','Hachijojima',33.11,139.79,1],['치치지마','Chichijima',27.09,142.19,1],['베이징','Beijing',39.90,116.40,0],['상하이','Shanghai',31.23,121.47,1],['청두','Chengdu',30.57,104.07,0],['라싸','Lhasa',29.65,91.17,0],['시닝','Xining',36.62,101.78,0],['타이베이','Taipei',25.03,121.57,1],['화롄','Hualien',23.99,121.60,1],['마닐라','Manila',14.60,120.98,1],['자카르타','Jakarta',-6.21,106.85,1],['욕야카르타','Yogyakarta',-7.80,110.36,1],['포트모르즈비','Port Moresby',-9.44,147.18,1],['포트빌라','Port Vila',-17.73,168.32,1],['루갠빌','Luganville',-15.52,167.18,1],['호니아라','Honiara',-9.43,159.95,1],['누메아','Noumea',-22.27,166.44,1],['수바','Suva',-18.14,178.44,1],['누쿠알로파','Nukualofa',-21.14,-175.20,1],['페트로파블롭스크','Petropavlovsk',53.02,158.65,1],['카불','Kabul',34.56,69.21,0],['이슬라마바드','Islamabad',33.68,73.05,0],['두샨베','Dushanbe',38.56,68.79,0],['케이프타운','Cape Town',-33.92,18.42,1],['시드니','Sydney',-33.87,151.21,1],['브리즈번','Brisbane',-27.47,153.03,1],['오클랜드','Auckland',-36.85,174.76,1],['웰링턴','Wellington',-41.29,174.78,1],['앵커리지','Anchorage',61.22,-149.90,1],['샌프란시스코','San Francisco',37.77,-122.42,1],['로스앤젤레스','Los Angeles',34.05,-118.24,1],['시애틀','Seattle',47.61,-122.33,1],['멕시코시티','Mexico City',19.43,-99.13,0],['과테말라시티','Guatemala City',14.63,-90.51,0],['산티아고','Santiago',-33.45,-70.67,0],['리마','Lima',-12.05,-77.04,1],['키토','Quito',-0.18,-78.47,0],['이스탄불','Istanbul',41.01,28.98,1],['아테네','Athens',37.98,23.73,1],['테헤란','Tehran',35.69,51.39,0],['델리','Delhi',28.61,77.21,0],['카트만두','Kathmandu',27.72,85.32,0],['로마','Rome',41.90,12.50,0],['레이캬비크','Reykjavik',64.15,-21.94,1]];
+
+const PLANTS = [['고리','Kori','한국',35.32,129.29],['월성','Wolsong','한국',35.71,129.48],['한울','Hanul','한국',37.09,129.38],['한빛','Hanbit','한국',35.41,126.42],
+['가시와자키카리와','Kashiwazaki-Kariwa','일본',37.43,138.60],['오이','Ohi','일본',35.54,135.65],['다카하마','Takahama','일본',35.52,135.50],['미하마','Mihama','일본',35.70,135.96],['쓰루가','Tsuruga','일본',35.75,136.02],['센다이(가고시마)','Sendai NPP','일본',31.83,130.19],['겐카이','Genkai','일본',33.52,129.84],['이카타','Ikata','일본',33.49,132.31],['오나가와','Onagawa','일본',38.40,141.50],['도마리','Tomari','일본',43.04,140.51],['도카이','Tokai','일본',36.47,140.61],['후쿠시마 제1 (폐로 중)','Fukushima Daiichi','일본',37.42,141.03],['하마오카','Hamaoka','일본',34.62,138.14],['시카','Shika','일본',37.06,136.73],['시마네','Shimane','일본',35.54,132.99],
+['다야만','Daya Bay','중국',22.60,114.55],['톈완','Tianwan','중국',34.69,119.46],['친산','Qinshan','중국',30.44,120.96],['푸칭','Fuqing','중국',25.45,119.45],['훙옌허','Hongyanhe','중국',39.80,121.48],['닝더','Ningde','중국',27.04,120.29],['양장','Yangjiang','중국',21.71,112.26],['타이산','Taishan','중국',21.92,112.98],['하이양','Haiyang','중국',36.71,121.38],['싼먼','Sanmen','중국',29.10,121.64],['창장','Changjiang','중국',19.46,108.90],['팡청강','Fangchenggang','중국',21.67,108.56],
+['디아블로캐니언','Diablo Canyon','미국',35.21,-120.85],['메차모르','Metsamor','아르메니아',40.18,44.15],['차슈마','Chashma','파키스탄',32.39,71.46],['카라치','Karachi','파키스탄',24.85,66.79],['타라푸르','Tarapur','인도',19.83,72.65],['쿠단쿨람','Kudankulam','인도',8.17,77.71],['부셰르','Bushehr','이란',28.83,50.89],['아쿠유','Akkuyu','튀르키예',36.14,33.54],['자포리자','Zaporizhzhia','우크라이나',47.51,34.59]]
+  .map(([ko, en, cc, lat, lng]) => ({ kind: 'plant', ko, en, cc, lat, lng }));
+
+const CHOKES = [['호르무즈 해협','Hormuz',26.57,56.25],['말라카 해협','Malacca',2.5,101.4],['수에즈 운하','Suez',30.6,32.33],['바브엘만데브','Bab el-Mandeb',12.58,43.33],['파나마 운하','Panama',9.08,-79.68],['지브롤터','Gibraltar',35.95,-5.6],['보스포루스','Bosphorus',41.12,29.07],['대만 해협','Taiwan Strait',24.5,119.5],['대한 해협','Korea Strait',34.5,129.0],['덴마크 해협','Danish Straits',55.6,12.7],['희망봉','Cape of Good Hope',-34.36,18.47],['롬복 해협','Lombok',-8.6,115.8]]
+  .map(([ko, en, lat, lng]) => ({ kind: 'choke', ko, en, lat, lng }));
+
+const HUBS = { ICN:[37.46,126.44], NRT:[35.77,140.39], PEK:[40.08,116.58], PVG:[31.14,121.81], HKG:[22.31,113.91], SIN:[1.36,103.99], BKK:[13.69,100.75], DEL:[28.56,77.1], DXB:[25.25,55.36], DOH:[25.27,51.61], IST:[41.27,28.75], LHR:[51.47,-0.45], FRA:[50.04,8.56], CDG:[49.01,2.55], JFK:[40.64,-73.78], LAX:[33.94,-118.41], SFO:[37.62,-122.38], ANC:[61.17,-150.0], SYD:[-33.94,151.18], GRU:[-23.43,-46.47], JNB:[-26.14,28.25] };
+const ROUTE_PAIRS = 'ICN-LAX ICN-JFK ICN-SFO ICN-FRA ICN-SIN NRT-LAX NRT-SFO NRT-LHR NRT-SYD PEK-FRA PVG-LAX HKG-LHR HKG-SYD SIN-LHR SIN-SYD BKK-DXB DEL-LHR DXB-LHR DXB-JFK DOH-CDG IST-JFK LHR-JFK FRA-JFK CDG-JFK LAX-SYD ANC-PVG GRU-LHR JNB-DXB JNB-LHR ICN-ANC'.split(' ')
+  .map(p => { const [a, b] = p.split('-'); return { type: 'route', startLat: HUBS[a][0], startLng: HUBS[a][1], endLat: HUBS[b][0], endLng: HUBS[b][1], gap: Math.random(), t: 3500 + Math.random() * 3000 }; });
+
+// ================= HELPERS =================
+const SCALE_RANK = { '1': 1, '2': 2, '3': 3, '4': 4, '5-': 5, '5+': 6, '6-': 7, '6+': 8, '7': 9 };
+function sev(e) {
+  if (e.type === 'missile' || e.type === 'eew') return 'crit';
+  if (e.type === 'tsunami') return 'crit';
+  const r = SCALE_RANK[e.maxScale] || 0;
+  if (r >= 6 || e.mag >= 6.3 || e.alert === 'orange' || e.alert === 'red') return 'crit';
+  if (r >= 4 || e.mag >= 5.8 || e.alert === 'yellow') return 'high';
+  return 'low';
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const T = ms => reduce ? 0 : ms;
+const $ = id => document.getElementById(id);
+const fmt = (d, tz) => new Date(d).toLocaleString('ko-KR', { timeZone: tz, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const regionOf = place => String(place).replace(/^\d+ km [NSEW]+ of /, '');
+const countryOf = place => (String(place).split(', ').pop() || place).replace(' region', '');
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? m + '분 전' : m < 1440 ? Math.round(m / 60) + '시간 전' : Math.round(m / 1440) + '일 전'; };
+
+const VP = 6.5, VS = 3.7, TSU_KMH = 720;
+const R_E = 6371, rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI;
+function distKm(a1, o1, a2, o2) {
+  const dA = rad(a2 - a1), dO = rad(o2 - o1);
+  const h = Math.sin(dA / 2) ** 2 + Math.cos(rad(a1)) * Math.cos(rad(a2)) * Math.sin(dO / 2) ** 2;
+  return 2 * R_E * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function circle(lat, lng, km, n = 120) {
+  const d = km / R_E, la = rad(lat), lo = rad(lng), pts = [];
+  for (let i = 0; i <= n; i++) {
+    const b = 2 * Math.PI * i / n;
+    const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
+    const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+    pts.push([deg(la2), deg(lo2)]);
+  }
+  return pts;
+}
+// Si & Midorikawa (1999) PGV attenuation -> JMA instrumental intensity. Rough estimate.
+function jmaI(M, depth, X) {
+  const D = Math.min(depth, 200);
+  const lg = 0.58 * M + 0.0038 * D - 1.29 - Math.log10(X + 0.0028 * 10 ** (0.5 * M)) - 0.002 * X;
+  return 2.68 + 1.72 * Math.log10(10 ** lg * 1.41);
+}
+const SHINDO = [[0.5,'0','#5b6b7c'],[1.5,'1','#9fb3c8'],[2.5,'2','#7cc0ff'],[3.5,'3','#58c4a8'],[4.5,'4','#e8d04a'],[5.0,'5-','#f0a23c'],[5.5,'5+','#f07a2c'],[6.0,'6-','#ff4d3d'],[6.5,'6+','#d63384'],[99,'7','#9b5de5']];
+const shindo = I => SHINDO.find(s => I < s[0]);
+const shByLabel = l => SHINDO.find(s => s[1] === l) || SHINDO[0];
+const shBadge = sh => `<span class="shindo" style="background:${sh[2]}">${sh[1]}</span>`;
+$('scale').innerHTML = SHINDO.slice(1).map(s => `<span style="background:${s[2]}">${s[1]}</span>`).join('');
+function nearPlants(e, km) {
+  return PLANTS.map(p => {
+    const epi = distKm(e.lat, e.lng, p.lat, p.lng), hypo = Math.hypot(epi, e.depth || 0);
+    return { ...p, epi, sh: shindo(jmaI(e.mag || 0, e.depth || 10, hypo)) };
+  }).filter(p => p.epi < km).sort((a, b) => a.epi - b.epi);
+}
+const tsunamiRisk = e => (e.type === 'quake' || e.type === 'eew') && e.mag >= 6.5 && e.depth < 70;
+
+// ================= CLOCK =================
+function tickClock() {
+  const n = new Date();
+  $('utc').textContent = n.toISOString().slice(11, 19);
+  $('kst').textContent = n.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ================= GLOBE =================
+const el = $('globe');
+let events = [];            // quakes, ascending by time
+const extra = [];           // missile / eew / tsunami items shown in feed
+const layers = { quake: true, plant: true, choke: true, route: false, aircraft: true, night: false };
+let countries = [], nightCells = [], missileArcs = [], acPoints = [];
+
+const world = new Globe(el)
+  .backgroundColor('rgba(0,0,0,0)')
+  .showAtmosphere(true).atmosphereColor('#3d7fd0').atmosphereAltitude(0.2)
+  .hexPolygonResolution(3).hexPolygonMargin(0.4).hexPolygonUseDots(true)
+  .hexPolygonColor(() => 'rgba(92, 150, 205, 0.75)')
+  .polygonCapColor(d => d.night ? `rgba(0,4,12,${d.a})` : 'rgba(0,0,0,0)')
+  .polygonSideColor(() => 'rgba(0,0,0,0)')
+  .polygonStrokeColor(d => d.night ? false : 'rgba(140, 190, 235, 0.35)')
+  .polygonAltitude(d => d.night ? 0.003 : 0.002)
+  .polygonsTransitionDuration(0)
+  .pointLat('lat').pointLng('lng')
+  .pointAltitude(d => d.type === 'ac' ? 0.006 + Math.min(d.alt, 45000) / 45000 * 0.03 : (d.mag - 4) / 25)
+  .pointRadius(d => d.type === 'ac' ? 0.07 : 0.18 + Math.max(0, d.mag - 4.5) * 0.12)
+  .pointColor(d => d.type === 'ac' ? (d.ground ? 'rgba(160,170,180,0.6)' : '#f4f8ff') : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[sev(d)])
+  .pointLabel(d => d.type === 'ac' ? `<div style="font:12px 'JetBrains Mono',monospace;background:rgba(9,15,24,.9);border:1px solid #1c2a3b;padding:4px 8px;border-radius:4px;color:#d6e2ee">${esc(d.flight)} ${esc(d.type2 || '')}<br>${d.ground ? '지상' : Math.round(d.alt).toLocaleString() + ' ft'}${d.gs ? ' · ' + Math.round(d.gs) + ' kt' : ''}</div>` : `<div style="font:12px 'IBM Plex Sans KR',sans-serif;background:rgba(9,15,24,.9);border:1px solid #1c2a3b;padding:4px 8px;border-radius:4px;color:#d6e2ee">M${d.mag.toFixed(1)} · ${esc(d.place)}</div>`)
+  .onPointClick(d => { if (d.type !== 'ac') focusOn(d, true); })
+  .labelLat('lat').labelLng('lng')
+  .labelText(d => d.kind === 'choke' ? d.en : '')
+  .labelSize(0.55).labelDotRadius(d => d.kind === 'plant' ? 0.28 : 0.4).labelAltitude(0.006).labelResolution(2)
+  .labelColor(d => d.kind === 'plant' ? (d.hot ? '#ff4d3d' : 'rgba(198,240,90,0.9)') : 'rgba(70,214,232,0.9)')
+  .labelLabel(d => `<div style="font:12px 'IBM Plex Sans KR',sans-serif;background:rgba(9,15,24,.9);border:1px solid #1c2a3b;padding:4px 8px;border-radius:4px;color:#d6e2ee">${d.kind === 'plant' ? '원전 · ' : '해상 요충지 · '}${esc(d.ko)}${d.cc ? ' (' + d.cc + ')' : ''}</div>`)
+  .pathPoints('pts').pathPointLat(p => p[0]).pathPointLng(p => p[1]).pathPointAlt(0.004)
+  .pathColor(d => d.c).pathStroke(d => d.w).pathTransitionDuration(0)
+  .pathDashLength(d => d.dash ? 0.012 : 1).pathDashGap(d => d.dash ? 0.008 : 0)
+  .ringsData([]).ringColor(r => t => r.color.replace('A', String(1 - t)))
+  .ringMaxRadius(r => r.max).ringPropagationSpeed(2.4).ringRepeatPeriod(650)
+  .arcColor(d => d.type === 'route' ? ['rgba(120,200,255,0.0)', 'rgba(150,215,255,0.75)'] : ['rgba(255,77,61,0.2)', '#ff4d3d'])
+  .arcStroke(d => d.type === 'route' ? 0.22 : 0.7)
+  .arcDashLength(d => d.type === 'route' ? 0.06 : 0.35).arcDashGap(d => d.type === 'route' ? 0.5 : 0.15)
+  .arcDashInitialGap(d => d.gap || 0).arcDashAnimateTime(d => d.t || 1400)
+  .arcAltitude(d => d.type === 'missile' ? 0.22 : null).arcAltitudeAutoScale(0.4)
+  .htmlElementsData([]).htmlElement(d => {
+    const w = document.createElement('div');
+    w.className = 'reticle ' + sev(d);
+    const tag = d.type === 'missile' ? 'TRACK 01 · IMPACT' : d.type === 'eew' ? 'EEW · M' + (d.mag ?? '?') : 'M' + d.mag.toFixed(1) + ' · ' + Math.round(d.depth) + 'KM';
+    w.innerHTML = `<div class="box"></div><div class="tag">${tag}</div>`;
+    return w;
+  });
+
+const mat = world.globeMaterial();
+mat.color.set('#0a1626'); mat.emissive && mat.emissive.set('#050c16'); mat.shininess = 4;
+const ctl = world.controls();
+ctl.autoRotate = !reduce; ctl.autoRotateSpeed = 0.45; ctl.enableDamping = true;
+world.pointOfView({ lat: 30, lng: 135, altitude: 2.3 }, 0);
+function fit() { world.width(el.clientWidth).height(el.clientHeight); }
+addEventListener('resize', fit); fit();
+
+function buildNight() {
+  const now = new Date();
+  const doy = (now - Date.UTC(now.getUTCFullYear(), 0, 0)) / 864e5;
+  const decl = rad(-23.44 * Math.cos(2 * Math.PI / 365 * (doy + 10)));
+  const hrs = now.getUTCHours() + now.getUTCMinutes() / 60;
+  const subLng = (12 - hrs) * 15;
+  const cells = [], S = 10;
+  for (let la = -90; la < 90; la += S) for (let lo = -180; lo < 180; lo += S) {
+    const cla = rad(la + S / 2), clo = rad(lo + S / 2);
+    const sinEl = Math.sin(cla) * Math.sin(decl) + Math.cos(cla) * Math.cos(decl) * Math.cos(clo - rad(subLng));
+    const a = Math.max(0, Math.min(1, (0.08 - sinEl) / 0.3)) * 0.38;
+    if (a > 0.02) cells.push({ night: true, a: a.toFixed(2), geometry: { type: 'Polygon', coordinates: [[[lo, la], [lo + S, la], [lo + S, la + S], [lo, la + S], [lo, la]]] } });
+  }
+  nightCells = cells;
+}
+const recentQuakes = () => events.filter(e => e.time > Date.now() - 7 * 864e5);
+function applyLayers() {
+  world.pointsData([...(layers.quake ? recentQuakes() : []), ...(layers.aircraft ? acPoints : [])]);
+  world.labelsData([...(layers.plant ? PLANTS : []), ...(layers.choke ? CHOKES : [])]);
+  world.arcsData([...(layers.route ? ROUTE_PAIRS : []), ...missileArcs]);
+  world.polygonsData([...countries, ...(layers.night ? nightCells : [])]);
+}
+buildNight();
+setInterval(() => { buildNight(); if (layers.night) applyLayers(); }, 300000);
+fetch('countries.geojson').then(r => r.json()).then(g => { countries = g.features; world.hexPolygonsData(g.features); applyLayers(); }).catch(() => {});
+
+const LAYER_DEFS = [['quake', '지진', '#f0b43c'], ['plant', '원전', '#c6f05a'], ['choke', '해상 요충지', '#46d6e8'], ['route', '주요 항로', '#96d7ff'], ['aircraft', '실시간 항공기', '#f4f8ff'], ['night', '낮/밤', '#5b6b7c']];
+LAYER_DEFS.forEach(([k, label, c], i) => {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.style.setProperty('--c', c);
+  b.setAttribute('aria-pressed', layers[k]); b.title = `단축키 ${i + 1}`;
+  b.innerHTML = `<i></i>${label}`;
+  b.addEventListener('click', () => toggleLayer(k));
+  b.dataset.k = k;
+  $('layers').append(b);
+});
+function toggleLayer(k) {
+  layers[k] = !layers[k];
+  document.querySelector(`.chip[data-k="${k}"]`).setAttribute('aria-pressed', layers[k]);
+  applyLayers();
+}
+
+// ================= SOUND =================
+let ac = null;
+$('sound').addEventListener('click', e => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on);
+  e.currentTarget.textContent = on ? '소리 끄기' : '소리 켜기';
+  if (on && !ac) { try { ac = new AudioContext(); } catch (_) {} }
+  if (!on) { ac && ac.close(); ac = null; }
+});
+function beep(kind) {
+  if (!ac) return;
+  const n = kind === 'crit' ? 3 : kind === 'eew' ? 5 : 1;
+  for (let i = 0; i < n; i++) {
+    const t0 = ac.currentTime + i * (kind === 'eew' ? 0.3 : 0.22);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = kind === 'eew' ? 'sine' : 'square';
+    o.frequency.value = kind === 'eew' ? (i % 2 ? 784 : 1047) : kind === 'crit' ? 880 : kind === 'hit' ? 440 : 660;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.08, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + 0.26);
+  }
+}
+
+// ================= SOURCE STATUS =================
+let status = {};
+function setStatus(s) {
+  status = s || {};
+  document.querySelectorAll('#srcs span').forEach(n => { n.dataset.s = status[n.dataset.k] || 'off'; n.title = `${n.textContent}: ${status[n.dataset.k] || 'off'}`; });
+  $('aiBtn').disabled = status.ai === 'off';
+  $('aiPw').hidden = !(status.aiNeedsPassword && status.ai !== 'off');
+  try { if (!$('aiPw').value) $('aiPw').value = localStorage.getItem('wf-ai-pw') || ''; } catch {}
+  $('aiNote').textContent = status.ai === 'off' ? '.env에 ANTHROPIC_API_KEY를 넣으면 켜져요' : '최근 지진과 경보를 Claude가 분석해요';
+}
+
+// ================= FEED / TABS / STATS =================
+const feedEl = $('feed');
+function feedItem(e, animate) {
+  const li = document.createElement('li');
+  li.className = 'sev-' + sev(e) + (animate ? ' new' : '');
+  li.tabIndex = 0;
+  let label, title, meta, tag = '';
+  if (e.type === 'missile') { label = 'MSL'; title = e.title; meta = '데모'; }
+  else if (e.type === 'eew') { label = 'EEW'; tag = '<span class="src-tag eew">긴급지진속보</span>'; title = `${e.place}${e.mag ? ' · M' + e.mag : ''}${e.cancelled ? ' (취소)' : ''}`; meta = '일본 기상청' + (e.demo ? ' · 테스트' : ''); }
+  else if (e.type === 'tsunami') { label = 'TSU'; tag = '<span class="src-tag tsu">쓰나미</span>'; title = e.cancelled ? '쓰나미 정보 해제' : `쓰나미 정보 · ${e.areas.length}개 해역`; meta = '일본 기상청'; }
+  else { label = e.mag.toFixed(1); tag = e.src === 'jma' ? `<span class="src-tag jma">JMA${e.maxScale ? ' 진도' + e.maxScale : ''}</span>` : ''; title = e.place; meta = '깊이 ' + Math.round(e.depth) + 'km'; }
+  li.innerHTML = `<div class="mag">${label}</div><div><div class="place">${tag}${esc(title)}</div><div class="meta">${fmt(e.time, 'Asia/Seoul')} KST · ${ago(e.time)} · ${meta}</div></div>`;
+  const go = () => e.type === 'tsunami' ? tsunamiFocus(e) : focusOn(e, true);
+  li.addEventListener('click', go);
+  li.addEventListener('keydown', k => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); k.stopPropagation(); go(); } });
+  return li;
+}
+function renderFeed() {
+  const all = [...recentQuakes(), ...extra].sort((a, b) => b.time - a.time).slice(0, 120);
+  feedEl.replaceChildren(...all.map(e => feedItem(e, false)));
+}
+function prependFeed(e) { feedEl.prepend(feedItem(e, true)); while (feedEl.children.length > 120) feedEl.lastChild.remove(); }
+function selectTab(which) {
+  const feed = which === 'feed';
+  $('tabFeed').setAttribute('aria-selected', feed); $('tabBrief').setAttribute('aria-selected', !feed);
+  $('paneFeed').hidden = !feed; $('paneBrief').hidden = feed;
+}
+$('tabFeed').addEventListener('click', () => selectTab('feed'));
+$('tabBrief').addEventListener('click', () => selectTab('brief'));
+
+function updateStats() {
+  const q = recentQuakes();
+  $('stCount').textContent = q.length;
+  $('stMax').textContent = q.length ? 'M' + Math.max(...q.map(x => x.mag)).toFixed(1) : '-';
+  $('stCrit').textContent = q.filter(x => sev(x) !== 'low').length;
+  const hot = new Set();
+  q.forEach(e => nearPlants(e, 400).forEach(p => { if (SHINDO.indexOf(p.sh) >= 3) hot.add(p.en); }));
+  PLANTS.forEach(p => p.hot = hot.has(p.en));
+  $('stNuke').textContent = hot.size;
+  const q48 = q.filter(e => e.time > Date.now() - 2 * 864e5);
+  let score = q48.reduce((s, e) => s + 10 ** (0.5 * (e.mag - 6)) * 7, 0) + (extra.some(x => x.type === 'eew' && !x.cancelled && x.time > Date.now() - 36e5) ? 30 : 0);
+  score = Math.min(100, Math.round(score));
+  const lv = score < 25 ? ['안정', 'var(--ok)'] : score < 50 ? ['주의', '#e8d04a'] : score < 75 ? ['경계', 'var(--accent)'] : ['심각', 'var(--crit)'];
+  $('idxVal').textContent = score; $('idxLv').textContent = lv[0]; $('idxLv').style.color = lv[1];
+  $('idxBar').style.width = score + '%'; $('idxBar').style.background = lv[1];
+  writeBrief(); renderTimeline();
+}
+
+// ================= RULE-BASED BRIEFING =================
+function writeBrief() {
+  const q = recentQuakes();
+  const out = [];
+  if (!q.length) { $('brief').innerHTML = '<p>아직 받은 이벤트가 없어요.</p>'; return; }
+  const top = q.reduce((a, b) => b.mag > a.mag ? b : a);
+  const day = q.filter(e => e.time > Date.now() - 864e5);
+  out.push(`<p><span class="tag t-q">개요</span>최근 7일 지진 <b>${q.length}건</b>, 지난 24시간 <b>${day.length}건</b>이에요. 가장 큰 건 ${esc(regionOf(top.place))}의 <b>M${top.mag.toFixed(1)}</b>(${ago(top.time)})이에요.</p>`);
+  let best = null;
+  q.forEach(e => { const nb = q.filter(o => distKm(e.lat, e.lng, o.lat, o.lng) < 400); if (!best || nb.length > best.nb.length) best = { e, nb }; });
+  if (best && best.nb.length >= 3) out.push(`<p><span class="tag t-q">집중</span>${esc(countryOf(best.e.place))} 일대 400km 안에 <b>${best.nb.length}건</b>이 몰려 있어요 (최대 M${Math.max(...best.nb.map(o => o.mag)).toFixed(1)}). 본진 뒤 여진이 이어지는 패턴일 수 있어요.</p>`);
+  const jp = q.filter(e => e.src === 'jma');
+  if (jp.length) {
+    const jt = jp.reduce((a, b) => (SCALE_RANK[b.maxScale] || 0) > (SCALE_RANK[a.maxScale] || 0) ? b : a);
+    out.push(`<p><span class="tag t-q">일본</span>기상청 발표 ${jp.length}건 중 최대 진도는 <b>${esc(jt.maxScale || '-')}</b> (${esc(jt.place.replace(' (일본 기상청)', ''))}, ${ago(jt.time)})예요.</p>`);
+  }
+  const eews = extra.filter(x => x.type === 'eew' && !x.demo);
+  if (eews.length) out.push(`<p><span class="tag t-m">속보</span>긴급지진속보가 ${eews.length}회 나왔어요. 최근 것은 ${esc(eews[0].place)} (${ago(eews[0].time)})예요.</p>`);
+  const deep = q.filter(e => e.depth > 300);
+  if (deep.length) out.push(`<p><span class="tag t-q">심발</span>깊이 300km 넘는 지진이 ${deep.length}건이에요. 지표 흔들림은 규모에 비해 약한 편이에요.</p>`);
+  const tsu = q.filter(tsunamiRisk);
+  const tsuAlerts = extra.filter(x => x.type === 'tsunami' && !x.cancelled);
+  if (tsu.length || tsuAlerts.length) out.push(`<p><span class="tag t-s">해양</span>${tsu.length ? `얕고 큰 해역 지진 ${tsu.length}건은 쓰나미 정보를 함께 확인해야 하는 유형이에요. ` : ''}${tsuAlerts.length ? `일본 기상청 쓰나미 정보가 ${tsuAlerts.length}건 있어요.` : ''}</p>`);
+  const hits = [];
+  q.forEach(e => nearPlants(e, 400).forEach(p => { if (SHINDO.indexOf(p.sh) >= 3) hits.push({ e, p }); }));
+  if (hits.length) {
+    hits.sort((a, b) => SHINDO.indexOf(b.p.sh) - SHINDO.indexOf(a.p.sh));
+    const h = hits[0];
+    out.push(`<p><span class="tag t-n">원전</span>${esc(regionOf(h.e.place))} M${h.e.mag.toFixed(1)} 지진이 <b>${esc(h.p.ko)} 원전</b>(${h.p.cc})에서 약 ${Math.round(h.p.epi)}km 떨어져 있어요. 그 위치 추정 진도는 ${h.p.sh[1]}이에요.${hits.length > 1 ? ` 이 밖에 ${hits.length - 1}건도 진도 3 이상으로 추정돼요.` : ''}</p>`);
+  } else out.push(`<p><span class="tag t-n">원전</span>등록된 원전 중 진도 3 이상 흔들림이 추정되는 곳은 없어요.</p>`);
+  const ch = [];
+  q.filter(e => e.mag >= 5).forEach(e => CHOKES.forEach(c => { const d = distKm(e.lat, e.lng, c.lat, c.lng); if (d < 600) ch.push({ e, c, d }); }));
+  ch.sort((a, b) => b.e.mag - a.e.mag);
+  out.push(ch.length ? `<p><span class="tag t-s">해운</span>${esc(ch[0].c.ko)}에서 ${Math.round(ch[0].d)}km 떨어진 곳에 M${ch[0].e.mag.toFixed(1)} 지진이 있었어요. 항만과 항로 공지를 확인해 보세요.</p>` : `<p><span class="tag t-s">해운</span>주요 해상 요충지 600km 안에서는 M5 이상 지진이 없었어요.</p>`);
+  $('brief').innerHTML = `<div class="stamp"><span>자동 브리핑 · 규칙 기반</span><span>${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5)} KST</span></div>` + out.join('');
+}
+let currentFocus = null;
+$('aiBtn').addEventListener('click', async () => {
+  const b = $('aiBtn'); b.disabled = true; $('aiNote').textContent = '분석 중이에요…';
+  try {
+    const f = currentFocus ? { type: currentFocus.type, place: currentFocus.place || currentFocus.title, mag: currentFocus.mag, lat: currentFocus.lat, lng: currentFocus.lng } : null;
+    const pw = $('aiPw').value;
+    try { localStorage.setItem('wf-ai-pw', pw); } catch {}
+    const r = await fetch('api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw }, body: JSON.stringify({ focus: f }) });
+    const j = await r.json();
+    if (!r.ok) { $('aiNote').textContent = j.error || '분석을 받지 못했어요'; if (r.status === 401) b.disabled = false; return; }
+    $('aiOut').innerHTML = `<div class="ai-out"><span class="lab">Claude 분석 · ${new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5)} KST</span>${esc(j.text)}</div>`;
+    $('aiNote').textContent = '데이터에 근거한 요약이에요. 피해 규모는 공식 발표를 확인하세요.';
+  } catch { $('aiNote').textContent = '서버에 연결하지 못했어요. server.js가 실행 중인지 확인해 주세요.'; }
+  finally { setTimeout(() => { b.disabled = status.ai === 'off'; }, 30000); }
+});
+
+// ================= TIMELINE =================
+let currentId = null;
+function renderTimeline() {
+  const tMax = Date.now(), tMin = tMax - 7 * 864e5;
+  $('tlStart').textContent = fmt(tMin, 'Asia/Seoul');
+  const track = $('tlTrack');
+  track.querySelectorAll('button').forEach(b => b.remove());
+  recentQuakes().filter(e => e.mag >= 4.5).forEach(e => {
+    const b = document.createElement('button');
+    const s = sev(e);
+    b.type = 'button'; b.className = 'on sev-' + s + (e.id === currentId ? ' cur' : '');
+    b.style.left = ((e.time - tMin) / (tMax - tMin) * 100) + '%';
+    b.title = `M${e.mag.toFixed(1)} · ${e.place}`;
+    b.setAttribute('aria-label', b.title);
+    b.innerHTML = `<i style="height:${Math.round(Math.max(12, Math.min(100, 20 + (e.mag - 5) * 45)))}%"></i>`;
+    b.addEventListener('click', () => focusOn(e, true));
+    track.append(b);
+  });
+}
+setInterval(renderTimeline, 60000);
+
+// ================= CINEMATIC FOCUS =================
+let busy = false, resumeTimer = null, dossierEl = null, cinemaQueue = [], paused = false;
+let simTimer = null, camTimer = null, camEl = null, noiseRaf = 0, dossierTimer = null, diveTimer = null;
+function clearFx() {
+  dossierEl && dossierEl.remove(); dossierEl = null;
+  clearInterval(simTimer); clearTimeout(camTimer); clearTimeout(dossierTimer); clearTimeout(diveTimer); cancelAnimationFrame(noiseRaf);
+  camEl && camEl.remove(); camEl = null;
+  document.querySelectorAll('.banner, .flash-edge, .scan').forEach(n => n.remove());
+  world.ringsData([]).htmlElementsData([]).pathsData([]);
+}
+function resume() {
+  clearFx(); missileArcs = []; acPoints = []; applyLayers(); currentId = null; currentFocus = null; renderTimeline();
+  world.pointOfView({ altitude: 2.3 }, T(2200));
+  setTimeout(() => { ctl.autoRotate = !reduce; busy = false; if (cinemaQueue.length && !paused) { const n = cinemaQueue.shift(); n.type === 'tsunami' ? tsunamiFocus(n) : focusOn(n); } }, T(2300));
+}
+function showBanner(text, cls) {
+  const b = document.createElement('div');
+  b.className = 'banner ' + (cls || ''); b.setAttribute('role', 'alert'); b.textContent = text;
+  $('app').append(b);
+}
+
+function focusOn(e, manual) {
+  clearTimeout(resumeTimer); clearFx();
+  busy = true; ctl.autoRotate = false; currentId = e.id; currentFocus = e; renderTimeline();
+  const s = sev(e), app = $('app');
+  if (s !== 'low' || e.type === 'eew') {
+    const txt = e.type === 'missile' ? '⚠ J-ALERT · 미사일 발사 (데모)'
+      : e.type === 'eew' ? (e.cancelled ? '긴급지진속보 취소' : `⚠ 긴급지진속보 · ${e.place}${e.demo ? ' (테스트)' : ''}`)
+      : `⚠ ${s === 'crit' ? 'Major' : 'Significant'} quake · M${e.mag.toFixed(1)}${e.maxScale ? ' · 진도 ' + e.maxScale : ''}`;
+    showBanner(txt, s === 'high' ? 'high' : '');
+    if (s === 'crit' && !e.cancelled) { const f = document.createElement('div'); f.className = 'flash-edge'; app.append(f); }
+    beep(e.type === 'eew' ? 'eew' : s);
+  }
+  const sc = document.createElement('div'); sc.className = 'scan'; app.append(sc);
+  const hasLoc = isFinite(e.lat) && isFinite(e.lng) && e.lat > -90;
+  const tgt = e.type === 'missile' ? { lat: (e.lat + e.impact.lat) / 2, lng: (e.lng + e.impact.lng) / 2 } : hasLoc ? e : { lat: 36, lng: 138 };
+  const cur = world.pointOfView();
+  world.pointOfView({ lat: (cur.lat + tgt.lat) / 2, lng: tgt.lng, altitude: 2.6 }, T(1100));
+  diveTimer = setTimeout(() => {
+    world.pointOfView({ lat: tgt.lat, lng: tgt.lng, altitude: e.type === 'missile' ? 1.15 : e.type === 'eew' ? 0.9 : 0.6 }, T(1700));
+    const rp = e.type === 'missile' ? e.impact : tgt;
+    world.ringsData([{ lat: rp.lat, lng: rp.lng, max: s === 'crit' ? 7 : 4.5, color: s === 'low' ? 'rgba(159,211,255,A)' : s === 'crit' ? 'rgba(255,77,61,A)' : 'rgba(240,180,60,A)' }]);
+    world.htmlElementsData([{ ...e, lat: rp.lat, lng: rp.lng }]);
+  }, T(1100));
+  dossierTimer = setTimeout(() => {
+    showDossier(e);
+    if (e.type === 'missile') startMissile(e);
+    else if (hasLoc) startWaves(e, e.type === 'eew' ? 1 : 20, e.type === 'eew' ? e.time : null);
+    if (e.type !== 'missile' && hasLoc && layers.aircraft) loadAircraft(e);
+  }, T(2700));
+  if (e.type !== 'missile' && hasLoc && (s !== 'low' || manual)) camTimer = setTimeout(() => showCam(e), T(4400));
+  resumeTimer = setTimeout(resume, T(e.type === 'eew' ? 90000 : manual ? 40000 : 22000));
+}
+
+// ================= DOSSIER =================
+let simCities = [], simTsu = [];
+function showDossier(e) {
+  const s = sev(e);
+  const d = document.createElement('section');
+  d.className = 'dossier ' + s;
+  d.setAttribute('aria-live', 'polite');
+  let rows, html = '', kind, title;
+  if (e.type === 'missile') {
+    kind = 'J-Alert · 탄도미사일<span class="demo">DEMO</span>'; title = e.title;
+    rows = [['발사 지점', '평안북도 동창리 부근'], ['추정 낙하', '동해상 (일본 EEZ 부근)'], ['경보 지역', '홋카이도 · 아오모리'], ['발령', fmt(e.time, 'Asia/Tokyo') + ' JST'], ['출처', '가상 시나리오']];
+    html += `<div class="sec"><div class="sec-h"><span>낙하까지 · x60</span></div><div class="countdown" id="mslT">12:00</div></div>`;
+    html += plantsBlock({ ...e, lat: e.impact.lat, lng: e.impact.lng, mag: 0, depth: 0 }, true);
+    html += `<p class="note">실제 경보가 아닌 데모예요.</p>`;
+  } else if (e.type === 'eew') {
+    kind = '긴급지진속보 · 일본 기상청' + (e.demo ? '<span class="demo">TEST</span>' : ''); title = e.place + (e.cancelled ? ' (취소됨)' : '');
+    rows = [['추정 규모', e.mag != null ? 'M ' + e.mag : '-'], ['깊이', (e.depth != null ? Math.round(e.depth) + ' km' : '-')], ['발생 (JST)', fmt(e.time, 'Asia/Tokyo')], ['출처', 'P2P지진정보 · 기상청 EEW']];
+    html += `<div class="sec"><div class="sec-h"><span>예상 진도 · 지역 (실시간)</span><b id="eewT"></b></div><table class="tbl"><thead><tr><th>지역</th><th>예상 진도</th><th>주요동 도달</th></tr></thead><tbody>${(e.areas || []).map((a, i) => `<tr><td>${esc(a.pref)} ${esc(a.name)}</td><td>${shBadge(shByLabel(a.from))}${a.to && a.to !== a.from ? ' ~ ' + esc(a.to) : ''}</td><td class="st" id="ea${i}">${a.arrival ? '' : '-'}</td></tr>`).join('') || '<tr><td colspan="3" class="none">지역 정보가 아직 없어요</td></tr>'}</tbody></table></div>`;
+    if (isFinite(e.lat) && e.lat > -90) html += cityBlock(e, 1, 1000) + plantsBlock(e, false);
+    html += `<p class="note">긴급지진속보는 첫 감지 직후의 추정치라 이후 바뀔 수 있어요. 지진파 도달 시간은 실제 시간으로 흘러가요.</p>`;
+  } else {
+    kind = e.src === 'jma' ? '지진 · 일본 기상청' : '지진 · USGS'; title = e.place;
+    rows = [['규모', 'M ' + e.mag.toFixed(1)], ['깊이', Math.round(e.depth) + ' km' + (e.depth < 70 ? ' (천발)' : e.depth > 300 ? ' (심발)' : ' (중발)')], ['발생 (KST)', fmt(e.time, 'Asia/Seoul') + ' · ' + ago(e.time)]];
+    if (e.maxScale) rows.push(['최대 진도', e.maxScale]);
+    if (e.tsunamiNote) rows.push(['쓰나미', ({ None: '걱정 없음', Unknown: '확인 중', Checking: '확인 중', NonEffective: '약간의 해수면 변동', Watch: '주의보', Warning: '경보' })[e.tsunamiNote] || e.tsunamiNote]);
+    if (e.alert) rows.push(['USGS 피해 경보', e.alert.toUpperCase()]);
+    if (e.points && e.points.length) html += `<div class="sec"><div class="sec-h"><span>관측 진도 · 기상청</span><b>${e.points.length}곳</b></div><table class="tbl"><tbody>${e.points.slice(0, 6).map(p => `<tr><td>${esc(p.addr)}</td><td>${shBadge(shByLabel(p.scale))}</td></tr>`).join('')}</tbody></table></div>`;
+    html += cityBlock(e, 20, 3000) + plantsBlock(e, false) + tsunamiBlock(e);
+    html += `<p class="note">진도 추정은 규모·깊이·거리로 계산한 대략치이고, 쓰나미 시간은 평균 수심을 가정한 직선거리 계산이에요.${e.url ? ` <a href="${esc(e.url)}" target="_blank" rel="noopener" style="color:var(--accent)">USGS 상세 보기</a>` : ''}</p>`;
+  }
+  html += `<div id="acBox"></div>`;
+  d.innerHTML = `<button class="close" type="button" aria-label="닫기">×</button><div class="kind">${kind}</div><h3>${esc(title)}</h3><dl></dl>${html}`;
+  const dl = d.querySelector('dl');
+  rows.forEach(([k, v], i) => {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = k; dd.textContent = v;
+    dt.style.animationDelay = dd.style.animationDelay = (reduce ? 0 : i * 100) + 'ms';
+    dl.append(dt, dd);
+  });
+  d.querySelectorAll('.sec').forEach((n, i) => { n.style.animationDelay = (reduce ? 0 : 450 + i * 250) + 'ms'; });
+  d.querySelector('.close').addEventListener('click', () => { clearTimeout(resumeTimer); resume(); });
+  $('app').append(d);
+  dossierEl = d;
+}
+function cityBlock(e, speed, radius) {
+  simCities = CITIES.map(([ko, en, la, lo, coast]) => {
+    const epi = distKm(e.lat, e.lng, la, lo), hypo = Math.hypot(epi, e.depth);
+    return { ko, epi, coast, tp: hypo / VP, ts: hypo / VS, sh: shindo(jmaI(e.mag || 0, e.depth, hypo)) };
+  }).filter(c => c.epi < radius).sort((a, b) => a.epi - b.epi);
+  const list = simCities.slice(0, 4);
+  const body = list.length ? list.map((c, i) => `<tr><td>${c.ko}</td><td>${Math.round(c.epi)}km</td><td>${shBadge(c.sh)}</td><td class="st" id="cs${i}">대기</td></tr>`).join('')
+    : `<tr><td colspan="4" class="none">반경 ${radius.toLocaleString()}km 안에 등록된 도시가 없어요</td></tr>`;
+  return `<div class="sec"><div class="sec-h"><span>도시별 지진파 도달 · ${speed === 1 ? '실시간' : 'x' + speed}</span><b id="simT">+0초</b></div><table class="tbl"><thead><tr><th>도시</th><th>진앙거리</th><th>추정 진도</th><th>상태</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function plantsBlock(e, missile) {
+  const list = nearPlants(e, missile ? 800 : 500).slice(0, 4);
+  const body = list.length ? list.map(p => `<tr><td>${esc(p.ko)} <span class="st">${p.cc}</span></td><td>${Math.round(p.epi)}km</td><td>${missile ? '-' : shBadge(p.sh)}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="none">반경 ${missile ? 800 : 500}km 안에 등록된 원전이 없어요</td></tr>`;
+  return `<div class="sec"><div class="sec-h n"><span>${missile ? '낙하 지점 주변 원전' : '주변 원전 · 추정 진도'}</span><b>${list.length}곳</b></div><table class="tbl"><thead><tr><th>원전</th><th>거리</th><th>${missile ? '' : '진도'}</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function tsunamiBlock(e) {
+  simTsu = [];
+  if (!tsunamiRisk(e)) return '';
+  simTsu = simCities.filter(c => c.coast).slice(0, 3).map(c => ({ ...c, eta: c.epi / TSU_KMH * 3600 }));
+  const body = simTsu.length ? simTsu.map((c, i) => `<tr><td>${c.ko}</td><td>${Math.round(c.epi)}km</td><td class="st" id="ts${i}">약 ${Math.round(c.eta / 60)}분</td></tr>`).join('') : '<tr><td colspan="3" class="none">가까운 해안 도시가 없어요</td></tr>';
+  return `<div class="sec"><div class="sec-h t"><span>쓰나미 전파 추정 · x600</span><b id="tsT">+0분</b></div><table class="tbl"><thead><tr><th>해안 도시</th><th>거리</th><th>도달</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// ================= WAVES =================
+// speed 1 = real time measured from originTime (used for live EEW); 20 = replay of a past quake
+function startWaves(e, speed, originTime) {
+  const start = performance.now();
+  const near = simCities.slice(0, 4);
+  const maxKm = Math.max(800, ...near.map(c => c.epi + 150));
+  const tsuMax = simTsu.length ? Math.max(...simTsu.map(c => c.epi)) + 200 : 1500;
+  const tsuOn = tsunamiRisk(e) && e.type === 'quake';
+  const hitDone = new Set();
+  const stepFn = () => {
+    const real = reduce ? 1e6 : (performance.now() - start) / 1000;
+    const tRaw = originTime ? (Date.now() - originTime) / 1000 : real * speed;
+    const t = Math.min(tRaw, near.reduce((m, c) => Math.max(m, c.ts), 0) + 5 + maxKm / VS);
+    const rP = Math.sqrt(Math.max(0, (VP * t) ** 2 - e.depth ** 2));
+    const rS = Math.sqrt(Math.max(0, (VS * t) ** 2 - e.depth ** 2));
+    const paths = [];
+    if (rP > 0 && rP < maxKm * 1.7) paths.push({ pts: circle(e.lat, e.lng, rP), c: 'rgba(124,192,255,0.9)', w: 0.45 });
+    if (rS > 0) paths.push({ pts: circle(e.lat, e.lng, Math.min(rS, maxKm)), c: 'rgba(255,90,60,0.95)', w: 0.8 });
+    let tt = 0;
+    if (tsuOn) {
+      tt = Math.min(real * 600, tsuMax / TSU_KMH * 3600);
+      const rT = TSU_KMH * tt / 3600;
+      if (rT > 5) paths.push({ pts: circle(e.lat, e.lng, rT, 160), c: 'rgba(70,214,232,0.9)', w: 0.6, dash: true });
+    }
+    world.pathsData(paths);
+    const tEl = $('simT'); if (tEl) tEl.textContent = '+' + Math.round(t) + '초';
+    near.forEach((c, i) => {
+      const td = $('cs' + i); if (!td) return;
+      let cls, txt;
+      if (t < c.tp) { cls = 'st'; txt = `P파 ${Math.ceil(c.tp - t)}초`; }
+      else if (t < c.ts) { cls = 'st s'; txt = `S파 ${Math.ceil(c.ts - t)}초`; }
+      else { cls = 'st hit'; txt = 'S파 도달'; if (!hitDone.has(i)) { hitDone.add(i); if (i === 0) beep('hit'); } }
+      if (td.textContent !== txt) td.textContent = txt;
+      if (td.className !== cls) td.className = cls;
+    });
+    if (e.type === 'eew') (e.areas || []).forEach((a, i) => {
+      const td = $('ea' + i); if (!td || !a.arrival) return;
+      const left = Math.ceil((a.arrival - Date.now()) / 1000);
+      const txt = left > 0 ? `${left}초` : '도달';
+      if (td.textContent !== txt) { td.textContent = txt; td.className = left > 0 ? 'st s' : 'st hit'; }
+    });
+    const tsEl = $('tsT'); if (tsEl) tsEl.textContent = '+' + Math.round(tt / 60) + '분';
+    simTsu.forEach((c, i) => {
+      const td = $('ts' + i); if (!td) return;
+      const left = c.eta - tt;
+      const txt = left > 0 ? `${Math.ceil(left / 60)}분 남음` : '도달 추정';
+      if (td.textContent !== txt) { td.textContent = txt; td.className = left > 0 ? 'st s' : 'st hit'; }
+    });
+    if (reduce || (rS >= maxKm && (!tsuOn || tt * TSU_KMH / 3600 >= tsuMax) && e.type !== 'eew')) clearInterval(simTimer);
+  };
+  clearInterval(simTimer);
+  simTimer = setInterval(stepFn, 80); stepFn();
+}
+function startMissile(e) {
+  const start = performance.now(), FLIGHT = 720;
+  const stepFn = () => {
+    const t = reduce ? FLIGHT : Math.min(FLIGHT, (performance.now() - start) / 1000 * 60);
+    const left = FLIGHT - t, n = $('mslT');
+    if (n) n.textContent = left > 0 ? `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(Math.floor(left % 60)).padStart(2, '0')}` : '낙하 추정';
+    if (left <= 0) { clearInterval(simTimer); beep('hit'); world.ringsData([{ lat: e.impact.lat, lng: e.impact.lng, max: 9, color: 'rgba(255,77,61,A)' }]); }
+  };
+  clearInterval(simTimer);
+  simTimer = setInterval(stepFn, 100); stepFn();
+}
+
+// ================= AIRCRAFT =================
+async function loadAircraft(e) {
+  const forId = e.id;
+  try {
+    const r = await fetch(`api/aircraft?lat=${e.lat}&lng=${e.lng}`);
+    const j = await r.json();
+    if (currentId !== forId) return;
+    acPoints = (j.ac || []).map(a => ({ ...a, type: 'ac', type2: a.type }));
+    applyLayers();
+    const box = $('acBox'); if (!box) return;
+    if (j.demo) { box.innerHTML = ''; return; }
+    if (j.error) { box.innerHTML = `<div class="sec" style="animation-delay:0s"><div class="sec-h"><span>주변 항공기</span></div><p class="note">${esc(j.error)}</p></div>`; return; }
+    const airborne = acPoints.filter(a => !a.ground).map(a => ({ ...a, d: distKm(e.lat, e.lng, a.lat, a.lng) })).sort((a, b) => a.d - b.d);
+    box.innerHTML = `<div class="sec" style="animation-delay:0s"><div class="sec-h"><span>주변 항공기 · 반경 460km</span><b>${airborne.length}대 비행 중</b></div><table class="tbl"><tbody>${airborne.slice(0, 4).map(a => `<tr><td>${esc(a.flight)} <span class="st">${esc(a.type2)}</span></td><td>${Math.round(a.d)}km</td><td>${Math.round(a.alt).toLocaleString()}ft</td></tr>`).join('') || '<tr><td class="none">비행 중인 항공기가 없어요</td></tr>'}</tbody></table></div>`;
+  } catch { /* server offline */ }
+}
+
+// ================= CAMERA POPUP =================
+async function showCam(e) {
+  const forId = e.id;
+  const c = document.createElement('section');
+  c.className = 'cam';
+  const region = regionOf(e.place || '');
+  const yt = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(region + ' live camera') + '&sp=EgJAAQ%253D%253D';
+  const windy = `https://www.windy.com/-Webcams/webcams?${e.lat.toFixed(2)},${e.lng.toFixed(2)},7`;
+  c.innerHTML = `<div class="hd"><span>현지 카메라</span><span class="rec">● 탐색</span></div>
+    <div class="view" id="camView"><canvas width="160" height="90"></canvas><div class="ovl"><span>CAM · ${e.lat.toFixed(2)}, ${e.lng.toFixed(2)}</span><span class="mid">주변 카메라를 찾는 중이에요</span><span>${fmt(Date.now(), 'Asia/Seoul')} KST</span></div></div>
+    <div class="meta" id="camMeta"></div><div class="alts" id="camAlts"></div>
+    <div class="links"><a href="${yt}" target="_blank" rel="noopener">유튜브 라이브캠</a><a href="${windy}" target="_blank" rel="noopener">주변 웹캠 지도</a></div>`;
+  $('app').append(c);
+  camEl = c;
+  const cv = c.querySelector('canvas'), g = cv.getContext('2d'), img = g.createImageData(160, 90);
+  let f = 0;
+  const draw = () => {
+    if (f++ % 2 === 0) { for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 120 | 0; img.data[i] = v * .7; img.data[i + 1] = v * .85; img.data[i + 2] = v; img.data[i + 3] = 255; } g.putImageData(img, 0, 0); }
+    if (!reduce) noiseRaf = requestAnimationFrame(draw);
+  };
+  draw();
+  let cams = [];
+  try { cams = (await (await fetch(`api/webcams?lat=${e.lat}&lng=${e.lng}`)).json()).cams || []; } catch {}
+  if (currentId !== forId || !camEl) return;
+  const playable = cams.filter(k => k.player || k.youtube || k.image);
+  if (!playable.length) {
+    c.querySelector('.ovl .mid').innerHTML = '근처에 연결된 카메라가 없어요<br>아래 링크로 찾아보세요';
+    c.querySelector('.rec').textContent = '● 신호 없음';
+    return;
+  }
+  const play = k => {
+    cancelAnimationFrame(noiseRaf);
+    c.classList.add('video');
+    const view = $('camView');
+    if (k.youtube) view.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(k.youtube)}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media" allowfullscreen title="${esc(k.title)}"></iframe>`;
+    else if (k.player) view.innerHTML = `<iframe src="${esc(k.player)}" allow="autoplay" allowfullscreen title="${esc(k.title)}"></iframe>`;
+    else view.innerHTML = `<img src="${esc(k.image)}" alt="${esc(k.title)}">`;
+    $('camMeta').textContent = `${k.title}${k.distKm != null ? ' · ' + k.distKm + 'km' : ''} · ${k.source === 'windy' ? 'Windy' : '내 목록'}`;
+    c.querySelector('.rec').textContent = '● LIVE';
+    $('camAlts').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b._k === k));
+  };
+  playable.slice(0, 5).forEach((k, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b._k = k;
+    b.textContent = `${i + 1}. ${k.title}`; b.addEventListener('click', () => play(k));
+    $('camAlts').append(b);
+  });
+  play(playable[0]);
+}
+
+// ================= TSUNAMI NOTICE =================
+function tsunamiFocus(a) {
+  clearTimeout(resumeTimer); clearFx();
+  busy = true; ctl.autoRotate = false; currentFocus = a;
+  showBanner(a.cancelled ? '쓰나미 정보 해제' : '⚠ 쓰나미 정보 · 일본 기상청', 'cyan');
+  if (!a.cancelled) beep('crit');
+  world.pointOfView({ lat: 36, lng: 138, altitude: 1.3 }, T(2000));
+  const d = document.createElement('section');
+  d.className = 'dossier cyan';
+  const G = { MajorWarning: '대쓰나미 경보', Warning: '쓰나미 경보', Watch: '쓰나미 주의보', Unknown: '확인 중' };
+  const rows = (a.areas || []).map(x => `<tr><td>${esc(x.name)}</td><td class="${x.grade === 'Watch' ? 'st s' : 'st hit'}">${G[x.grade] || esc(x.grade)}${x.immediate ? ' · 즉시 도달' : ''}</td></tr>`).join('');
+  d.innerHTML = `<button class="close" type="button" aria-label="닫기">×</button><div class="kind">쓰나미 · 일본 기상청</div><h3>${a.cancelled ? '쓰나미 정보가 해제됐어요' : '쓰나미 정보 발표'}</h3><div class="sec" style="animation-delay:.2s"><div class="sec-h t"><span>대상 해역</span><b>${(a.areas || []).length}곳</b></div><table class="tbl"><tbody>${rows || '<tr><td class="none">해역 정보 없음</td></tr>'}</tbody></table></div><p class="note">${fmt(a.time, 'Asia/Tokyo')} JST 발표. 해안에 있다면 공식 안내를 먼저 따르세요.</p>`;
+  d.querySelector('.close').addEventListener('click', () => { clearTimeout(resumeTimer); resume(); });
+  $('app').append(d); dossierEl = d;
+  resumeTimer = setTimeout(resume, T(60000));
+}
+
+// ================= LIVE DATA =================
+function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
+function addQuake(q, live) {
+  const e = normalizeQuake(q);
+  const i = events.findIndex(x => x.id === e.id);
+  if (i >= 0) events[i] = e; else events.push(e);
+  events.sort((a, b) => a.time - b.time);
+  applyLayers();
+  if (live) { prependFeed(e); updateStats(); }
+  return e;
+}
+function handleNew(e) {
+  if (sev(e) === 'low') { world.ringsData([{ lat: e.lat, lng: e.lng, max: 3, color: 'rgba(159,211,255,A)' }]); setTimeout(() => { if (!busy) world.ringsData([]); }, 4000); return; }
+  if (paused) return;
+  busy ? cinemaQueue.push(e) : focusOn(e);
+}
+function connectStream() {
+  const es = new EventSource('api/stream');
+  es.addEventListener('hello', m => setStatus(JSON.parse(m.data).status));
+  es.addEventListener('status', m => setStatus(JSON.parse(m.data)));
+  es.addEventListener('quake', m => handleNew(addQuake(JSON.parse(m.data), true)));
+  es.addEventListener('eew', m => {
+    const a = { ...JSON.parse(m.data), type: 'eew' };
+    extra.push(a); prependFeed(a); updateStats();
+    cinemaQueue = []; focusOn(a); // early warnings always interrupt
+  });
+  es.addEventListener('tsunami', m => {
+    const a = { ...JSON.parse(m.data), type: 'tsunami' };
+    extra.push(a); prependFeed(a); updateStats();
+    busy && !paused ? cinemaQueue.push(a) : tsunamiFocus(a);
+  });
+  es.onerror = () => { $('liveDot').textContent = '연결 끊김 · 재시도 중'; $('liveDot').classList.add('paused'); };
+  es.onopen = () => { $('liveDot').textContent = paused ? '자동 이동 꺼짐' : '실시간 피드'; $('liveDot').classList.toggle('paused', paused); };
+}
+
+async function init() {
+  let st = { quakes: [], alerts: [], status: {} };
+  try { st = await (await fetch('api/state')).json(); }
+  catch { $('bootLog').innerHTML += '\n<em>[ !! ]</em> 서버에 연결하지 못했어요. 이 페이지는 server.js로 열어야 해요.'; }
+  st.quakes.forEach(q => addQuake(q, false));
+  st.alerts.slice().reverse().forEach(a => extra.push({ ...a, type: a.kind }));
+  setStatus(st.status);
+  renderFeed(); updateStats();
+  connectStream();
+  return st;
+}
+
+// ================= CONTROLS =================
+function nextSignificant() {
+  const sig = [...recentQuakes()].filter(e => sev(e) !== 'low').sort((a, b) => b.time - a.time);
+  if (!sig.length) return;
+  const i = sig.findIndex(e => e.id === currentId);
+  cinemaQueue = [];
+  focusOn(sig[(i + 1) % sig.length], true);
+}
+function setPaused(p) {
+  paused = p;
+  $('pause').setAttribute('aria-pressed', p);
+  $('pause').firstChild.textContent = p ? '자동 이동 켜기' : '자동 이동 끄기';
+  $('liveDot').classList.toggle('paused', p);
+  $('liveDot').textContent = p ? '자동 이동 꺼짐' : '실시간 피드';
+  if (p) cinemaQueue = [];
+}
+$('pause').addEventListener('click', () => setPaused(!paused));
+$('next').addEventListener('click', nextSignificant);
+function testEEW() {
+  const now = Date.now();
+  const a = {
+    id: 'eew-test-' + now, type: 'eew', kind: 'eew', demo: true, cancelled: false, time: now - 3000,
+    lat: 33.2, lng: 135.9, depth: 30, mag: 7.4, place: '기이반도 남쪽 앞바다 (테스트)',
+    areas: [['와카야마', 'Wakayama', '6-', 18], ['미에', 'Mie', '5+', 32], ['나라', 'Nara', '5+', 30], ['오사카', 'Osaka', '5-', 42], ['효고', 'Hyogo', '4', 55], ['아이치', 'Aichi', '4', 60], ['교토', 'Kyoto', '4', 55], ['도쿠시마', 'Tokushima', '5-', 40]]
+      .map(([pref, name, sc, sec]) => ({ pref, name, from: sc, to: sc, arrival: now + sec * 1000 }))
+  };
+  extra.push(a); prependFeed(a); cinemaQueue = []; focusOn(a);
+}
+$('eewTest').addEventListener('click', testEEW);
+function fireMissile() {
+  const e = { id: 'm' + Date.now(), type: 'missile', mag: 9, time: Date.now(), title: '북한 탄도미사일 발사 추정 (데모)', lat: 39.66, lng: 124.70, impact: { lat: 40.9, lng: 136.2 } };
+  extra.push(e); prependFeed(e);
+  missileArcs = [{ type: 'missile', startLat: e.lat, startLng: e.lng, endLat: e.impact.lat, endLng: e.impact.lng }];
+  applyLayers(); cinemaQueue = []; focusOn(e, true);
+}
+$('jalert').addEventListener('click', fireMissile);
+addEventListener('keydown', k => {
+  if (k.target.closest && k.target.closest('input, textarea')) return;
+  if (k.key === ' ' && !(k.target.closest && k.target.closest('button, li'))) { k.preventDefault(); setPaused(!paused); }
+  else if (k.key === 'n' || k.key === 'N') nextSignificant();
+  else if (k.key === 'j' || k.key === 'J') fireMissile();
+  else if (k.key === 'e' || k.key === 'E') $('eewTest').click();
+  else if (k.key === 'Escape' && busy) { clearTimeout(resumeTimer); resume(); }
+  else if (k.key >= '1' && k.key <= '6') toggleLayer(LAYER_DEFS[+k.key - 1][0]);
+});
+
+// ================= BOOT =================
+let booted = false;
+function endBoot(st) {
+  if (booted) return; booted = true;
+  $('boot').classList.add('out');
+  setTimeout(() => $('boot').remove(), 700);
+  const sig = recentQuakes().filter(e => sev(e) !== 'low').sort((a, b) => b.time - a.time)[0];
+  if (sig && !paused) setTimeout(() => focusOn(sig), T(1200));
+}
+(async () => {
+  const log = $('bootLog');
+  const add = (l, wait = 200) => new Promise(r => { log.innerHTML += (log.innerHTML ? '\n' : '') + l; setTimeout(r, reduce ? 0 : wait); });
+  $('boot').addEventListener('click', () => endBoot());
+  await add('<span class="h">WATCHFLOOR</span>');
+  await add('실시간 감시 콘솔 초기화 중…');
+  const st = await init();
+  const S = st.status || {};
+  const okTag = s => s === 'ok' || s === 'ready' ? '<b>[ OK ]</b>' : s === 'snapshot' || s === 'wait' ? '<em>[ .. ]</em>' : '<em>[ -- ]</em>';
+  await add(`${okTag(S.usgs)} USGS 지진 · ${events.filter(e => e.src !== 'jma').length}건${S.usgs === 'snapshot' ? ' (오프라인 스냅샷)' : ''}`);
+  await add(`${okTag(S.jma)} 일본 기상청 (P2P지진정보) · ${events.filter(e => e.src === 'jma').length}건${S.jma === 'off' ? ' · 꺼짐' : ''}`);
+  await add(`${okTag(S.webcams)} 웹캠 · ${S.webcams === 'off' ? 'Windy 키 없음 (cams.json / 링크 사용)' : 'Windy 연결'}`);
+  await add(`${okTag(S.ai)} AI 브리핑 · ${S.ai === 'off' ? '꺼짐' : 'Claude 연결'}`);
+  await add(`<b>[ OK ]</b> 원전 ${PLANTS.length}기 · 해상 요충지 ${CHOKES.length}곳 · 항로 ${ROUTE_PAIRS.length}개`);
+  await add('<em>[ .. ]</em> 경보 엔진 가동 · 클릭하면 건너뛰어요', 500);
+  endBoot(st);
+})();
+</script>
+</body>
+</html>

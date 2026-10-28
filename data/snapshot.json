@@ -1,0 +1,155 @@
+{
+ "note": "USGS M4.5+ snapshot 2026-10-24..27, used in demo/offline mode",
+ "quakes": [
+  {
+   "id": "snap0",
+   "src": "usgs",
+   "mag": 6.9,
+   "place": "197 km WNW of Port-Olry, Vanuatu",
+   "time": "2026-10-24T02:31:28Z",
+   "lat": -14.0558,
+   "lng": 165.5455,
+   "depth": 10.0
+  },
+  {
+   "id": "snap1",
+   "src": "usgs",
+   "mag": 6.5,
+   "place": "Bonin Islands, Japan region",
+   "time": "2026-10-25T02:03:38Z",
+   "lat": 27.7953,
+   "lng": 139.6184,
+   "depth": 492.4
+  },
+  {
+   "id": "snap2",
+   "src": "usgs",
+   "mag": 6.3,
+   "place": "170 km NW of Port-Olry, Vanuatu",
+   "time": "2026-10-24T02:36:02Z",
+   "lat": -14.0424,
+   "lng": 165.8666,
+   "depth": 10.0
+  },
+  {
+   "id": "snap3",
+   "src": "usgs",
+   "mag": 6.1,
+   "place": "25 km ENE of Port-Olry, Vanuatu",
+   "time": "2026-10-25T02:24:00Z",
+   "lat": -14.9964,
+   "lng": 167.3039,
+   "depth": 116.0
+  },
+  {
+   "id": "snap4",
+   "src": "usgs",
+   "mag": 5.9,
+   "place": "218 km ENE of Nagqu, China",
+   "time": "2026-10-25T11:25:57Z",
+   "lat": 32.4625,
+   "lng": 94.0534,
+   "depth": 7.0
+  },
+  {
+   "id": "snap5",
+   "src": "usgs",
+   "mag": 5.8,
+   "place": "Bouvet Island region",
+   "time": "2026-10-24T15:24:19Z",
+   "lat": -54.0304,
+   "lng": 7.0149,
+   "depth": 12.5
+  },
+  {
+   "id": "snap6",
+   "src": "usgs",
+   "mag": 5.8,
+   "place": "196 km NW of Port-Olry, Vanuatu",
+   "time": "2026-10-27T08:55:23Z",
+   "lat": -13.9141,
+   "lng": 165.6671,
+   "depth": 11.0
+  },
+  {
+   "id": "snap7",
+   "src": "usgs",
+   "mag": 5.5,
+   "place": "283 km E of Levuka, Fiji",
+   "time": "2026-10-26T10:13:01Z",
+   "lat": -18.283,
+   "lng": -178.0109,
+   "depth": 641.8
+  },
+  {
+   "id": "snap8",
+   "src": "usgs",
+   "mag": 5.4,
+   "place": "128 km S of Pundong, Indonesia",
+   "time": "2026-10-27T14:44:00Z",
+   "lat": -9.1162,
+   "lng": 110.3305,
+   "depth": 10.0
+  },
+  {
+   "id": "snap9",
+   "src": "usgs",
+   "mag": 5.4,
+   "place": "33 km ESE of Ambunti, Papua New Guinea",
+   "time": "2026-10-25T10:30:27Z",
+   "lat": -4.3644,
+   "lng": 143.0843,
+   "depth": 72.3
+  },
+  {
+   "id": "snap10",
+   "src": "usgs",
+   "mag": 5.3,
+   "place": "Bonin Islands, Japan region",
+   "time": "2026-10-25T22:14:16Z",
+   "lat": 27.8572,
+   "lng": 139.6916,
+   "depth": 485.1
+  },
+  {
+   "id": "snap11",
+   "src": "usgs",
+   "mag": 5.3,
+   "place": "44 km ESE of Miyazaki, Japan",
+   "time": "2026-10-24T23:59:36Z",
+   "lat": 31.8226,
+   "lng": 131.873,
+   "depth": 10.0
+  },
+  {
+   "id": "snap12",
+   "src": "usgs",
+   "mag": 5.3,
+   "place": "101 km SSE of Vilyuchinsk, Russia",
+   "time": "2026-10-24T20:35:04Z",
+   "lat": 52.1565,
+   "lng": 159.1963,
+   "depth": 70.2
+  },
+  {
+   "id": "snap13",
+   "src": "usgs",
+   "mag": 5.3,
+   "place": "223 km ENE of Nagqu, China",
+   "time": "2026-10-24T08:39:53Z",
+   "lat": 32.5629,
+   "lng": 94.048,
+   "depth": 10.0
+  },
+  {
+   "id": "snap14",
+   "src": "usgs",
+   "mag": 5.2,
+   "place": "59 km SW of Ashkasham, Afghanistan",
+   "time": "2026-10-25T17:44:23Z",
+   "lat": 36.274,
+   "lng": 71.1025,
+   "depth": 110.0
+  }
+ ]
+}

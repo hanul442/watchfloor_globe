@@ -1,0 +1,16 @@
+{
+  "name": "watchfloor-live",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal real-time OSINT globe: earthquakes, Japan early warnings, aircraft, webcams",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node server.js --demo"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0"
+  }
+}
