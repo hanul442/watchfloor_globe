@@ -438,6 +438,33 @@ button { font-family: inherit; }
 @media (max-width: 1500px) { .clock .utc, .topbar .btn kbd, .apps kbd { display: none; } }
 @media (max-width: 1240px) { .topbar .clock, .brand small { display: none; } .topbar { gap: 10px; } }
 @media (max-width: 1060px) { .brand { font-size: 0; } .brand b { font-size: 15px; } #next { display: none; } }
+/* ---------- investigations ---------- */
+.inv { padding: 10px 12px 14px; }
+.rail .tabs button { letter-spacing: .06em; padding-inline: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-cur { display: grid; gap: 6px; }
+.inv input[type=text], .inv textarea { font: 13px var(--f-body); color: var(--fg); background: rgba(9,15,24,.85); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; width: 100%; box-sizing: border-box; resize: vertical; }
+.inv input:focus, .inv textarea:focus { outline: none; border-color: var(--accent); }
+.inv-sum { margin: 2px 0 0; font: 11px var(--f-mono); color: var(--muted); }
+.inv-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.inv-act .btn { padding: 5px 9px; font-size: 11px; }
+.inv-msg { margin: 4px 0 0; min-height: 1.4em; font-size: 12px; color: var(--cyan); }
+.inv-msg.bad { color: var(--crit); }
+.inv-lh { margin-top: 16px; }
+.inv-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.inv-list li { display: flex; align-items: stretch; border-top: 1px solid var(--line); }
+.inv-list li.cur { box-shadow: inset 2px 0 0 var(--accent); }
+.inv-list li.none { display: block; padding: 10px 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.inv-open { flex: 1; text-align: left; background: none; border: 0; color: var(--fg); padding: 8px 6px; cursor: pointer; display: grid; gap: 2px; }
+.inv-open:hover { background: rgba(255,255,255,.04); }
+.inv-open b { font: 600 13px var(--f-body); }
+.inv-open span { font: 11px var(--f-mono); color: var(--muted); }
+.inv-del { background: none; border: 0; color: var(--muted); font: 11px var(--f-body); padding: 0 8px; cursor: pointer; }
+.inv-del:hover { color: var(--crit); }
+.inv-log { margin-top: 14px; }
+.inv-log summary { cursor: pointer; }
+.inv-log ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; max-height: 180px; overflow-y: auto; }
+.inv-log li { padding: 3px 0; }
+.inv .note { font-size: 11px; color: var(--muted); line-height: 1.5; }
 </style>
 
 </head>
@@ -469,12 +496,14 @@ button { font-family: inherit; }
     <div class="tabs" role="tablist">
       <button role="tab" id="tabFeed" aria-selected="true" aria-controls="paneFeed" type="button"><span class="live" id="liveDot">실시간 피드</span></button>
       <button role="tab" id="tabFacets" aria-selected="false" aria-controls="paneFacets" type="button">분포</button>
-      <button role="tab" id="tabBrief" aria-selected="false" aria-controls="paneBrief" type="button">상황 브리핑</button>
+      <button role="tab" id="tabInv" aria-selected="false" aria-controls="paneInv" type="button">조사</button>
+      <button role="tab" id="tabBrief" aria-selected="false" aria-controls="paneBrief" type="button">브리핑</button>
     </div>
     <div class="stats"><span><b id="stCount">0</b>24시간 사건</span><span><b id="stMax">0</b>주요 사건</span><span><b id="stCrit">0</b>분쟁</span><span><b id="stNuke">0</b>재난</span></div>
     <div class="pills" id="pills" hidden></div>
     <div class="pane" id="paneFeed" role="tabpanel"><div class="fchips" id="evFilters" aria-label="사건 유형"></div><ul class="feed" id="feed"></ul></div>
     <div class="pane" id="paneFacets" role="tabpanel" hidden><div class="facets" id="facets"></div></div>
+    <div class="pane" id="paneInv" role="tabpanel" hidden><div class="inv" id="invPane"></div></div>
     <div class="pane" id="paneBrief" role="tabpanel" hidden>
       <div class="brief">
         <div class="ai" id="aiRow"><input id="aiPw" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="AI 분석 비밀번호" hidden style="font:13px var(--f-body);background:rgba(20,32,48,.8);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;width:110px"><button class="btn" id="aiBtn" type="button">Claude 분석 요청</button><small id="aiNote"></small></div>
@@ -752,7 +781,7 @@ function setStatus(s) {
 // ================= FEED / TABS / STATS =================
 const feedEl = $('feed');
 function selectTab(which) {
-  [['feed', 'tabFeed', 'paneFeed'], ['facets', 'tabFacets', 'paneFacets'], ['brief', 'tabBrief', 'paneBrief']].forEach(([k, t, p]) => {
+  [['feed', 'tabFeed', 'paneFeed'], ['facets', 'tabFacets', 'paneFacets'], ['inv', 'tabInv', 'paneInv'], ['brief', 'tabBrief', 'paneBrief']].forEach(([k, t, p]) => {
     $(t).setAttribute('aria-selected', k === which); $(p).hidden = k !== which;
   });
 }
@@ -1165,7 +1194,7 @@ function upsertEvent(raw) {
   const ev = { ...raw, start: +raw.start, updated: +raw.updated };
   const a = anchorOf(ev);
   // spread country-level stories so they don't stack on one dot
-  if (a && a.kind === 'news' && a.scope === 'country') {
+  if (a && a.kind === 'news' && a.scope === 'country' && !raw.snap) {
     const h = hashOf(ev.id);
     ev.lat += ((h & 255) / 255 - 0.5) * 2.4; ev.lng += (((h >> 8) & 255) / 255 - 0.5) * 2.4;
   }
@@ -1174,6 +1203,7 @@ function upsertEvent(raw) {
   return ev;
 }
 function inView(ev) {
+  if (ev.snap) return true;   // copies kept by an open investigation
   if (!viewRange) return ev.updated > Date.now() - 7 * 864e5;
   return ev.start <= viewRange[1] && ev.updated >= viewRange[0];
 }
@@ -1752,6 +1782,7 @@ function emit() {
     renderFeed(); applyLayers(); updateStats(); renderTimeline(); renderFacets();
     if (S.app === 'graph') renderGraph();
     if (S.app === 'table') renderTable();
+    if ($('invSum')) $('invSum').textContent = invSum();
     if (S.screen) { const st = $('typePanel').scrollTop; renderScreen(); $('typePanel').scrollTop = st; }
   }, 30);
 }
@@ -2100,6 +2131,200 @@ function newsScreen() {
 document.querySelectorAll('.screens button').forEach(b => b.addEventListener('click', () => setScreen(b.dataset.screen)));
 
 
+// ================= INVESTIGATIONS (저장 · 열기 · 공유) =================
+// An investigation is the current analysis state: filters, selection, Search Around
+// links, app, screen, time range, camera, a note, and copies of the events it uses
+// (so it still opens after those events leave the live feed). Kept in this browser
+// only; shared as a link or a .json file.
+const INV_KEY = 'wf.investigations.v1';
+S.inv = null;            // { id, name, created } of the open investigation
+S.invNote = '';
+function invAll() { try { const l = JSON.parse(localStorage.getItem(INV_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch { return []; } }
+function invWrite(list) {
+  try { localStorage.setItem(INV_KEY, JSON.stringify(list)); return true; }
+  catch { invMsg('이 브라우저에 저장하지 못했어요. 저장 공간이 꽉 찼거나 막혀 있어요. "파일로 내보내기"로 보관해 주세요.', true); return false; }
+}
+function invMsg(t, bad) { const n = $('invMsg'); if (!n) return; n.textContent = t; n.classList.toggle('bad', !!bad); clearTimeout(invMsg.t); invMsg.t = setTimeout(() => { n.textContent = ''; }, 6000); }
+
+// copy of an event small enough for a link: few signals, no long text
+const invSlim = (ev, max = 6) => ({ ...ev, snap: true, signals: ev.signals.slice(0, max).map(({ desc, ...s }) => s) });
+
+function invCapture() {
+  const ids = new Set([...S.sel, ...S.links.flatMap(l => [l.a, l.b])]);
+  const pov = world.pointOfView();
+  return {
+    v: 1, id: S.inv?.id || 'inv-' + Date.now().toString(36), name: ($('invName')?.value || '').trim() || S.inv?.name || '이름 없는 조사',
+    created: S.inv?.created || Date.now(), updated: Date.now(),
+    filters: Object.fromEntries(FACETS.map(([k]) => [k, [...S.filters[k]]])),
+    sel: [...S.sel], links: S.links.slice(), extra: [...S.extra.values()],
+    app: S.app, screen: S.screen || null, range: viewRange ? viewRange.slice() : null,
+    pov: { lat: +pov.lat.toFixed(3), lng: +pov.lng.toFixed(3), altitude: +pov.altitude.toFixed(2) },
+    note: ($('invNote')?.value ?? S.invNote) || '',
+    events: [...ids].map(id => EV.get(id)).filter(Boolean).map(ev => invSlim(ev))
+  };
+}
+
+function invValid(inv) { return inv && inv.v === 1 && typeof inv.id === 'string' && Array.isArray(inv.events) && Array.isArray(inv.sel); }
+
+function invApply(inv) {
+  // events that are no longer live come back as read-only copies
+  inv.events.forEach(e => { if (!EV.has(e.id) && isFinite(e.lat) && Array.isArray(e.signals)) upsertEvent({ ...e, snap: true }); });
+  if (busy) { clearTimeout(resumeTimer); resume(); }
+  stopReplay();
+  setPaused(true);
+  const want = inv.screen && SCREENS[inv.screen] ? inv.screen : null;
+  if (S.screen !== want) setScreen(want || S.screen);   // setScreen(current) closes it
+  FACETS.forEach(([k]) => { S.filters[k].clear(); (inv.filters?.[k] || []).forEach(v => S.filters[k].add(v)); });
+  S.sel.clear(); inv.sel.forEach(id => EV.has(id) && S.sel.add(id));
+  S.links = (inv.links || []).filter(l => l && l.a && l.b);
+  S.extra = new Map((inv.extra || []).filter(x => x && x.id).map(x => [x.id, x]));
+  S.inv = { id: inv.id, name: inv.name, created: inv.created };
+  S.invNote = inv.note || '';
+  setRange(Array.isArray(inv.range) && inv.range.length === 2 ? inv.range : null);
+  setApp(['map', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
+  if (inv.pov && isFinite(inv.pov.lat)) { ctl.autoRotate = false; world.pointOfView(inv.pov, T(1500)); }
+  emit(); renderInv();
+  logAct('조사 열기', inv.name);
+}
+
+function invSave() {
+  const inv = invCapture();
+  const list = invAll().filter(x => x.id !== inv.id);
+  list.unshift(inv);
+  if (!invWrite(list.slice(0, 60))) return;
+  S.inv = { id: inv.id, name: inv.name, created: inv.created };
+  renderInv();
+  invMsg(`"${inv.name}" 저장했어요.`);
+  logAct('조사 저장', inv.name);
+}
+function invNew() {
+  // drop read-only copies, clear the workspace
+  for (const [id, ev] of EV) if (ev.snap) EV.delete(id);
+  S.inv = null; S.invNote = '';
+  FACETS.forEach(([k]) => S.filters[k].clear());
+  S.sel.clear(); S.links = []; S.extra.clear();
+  setRange(null);
+  emit(); renderInv();
+}
+function invDelete(id) {
+  const inv = invAll().find(x => x.id === id); if (!inv) return;
+  if (!confirm(`조사 "${inv.name}"을(를) 이 브라우저에서 지울까요? 되돌릴 수 없어요.`)) return;
+  invWrite(invAll().filter(x => x.id !== id));
+  if (S.inv?.id === id) S.inv = null;
+  renderInv(); invMsg(`"${inv.name}" 지웠어요.`);
+  logAct('조사 삭제', inv.name);
+}
+
+// ---- activity log: what was done in this browser (no accounts, nothing leaves the device) ----
+const ACT_KEY = 'wf.activity.v1';
+function logAct(what, name) {
+  try {
+    const l = JSON.parse(localStorage.getItem(ACT_KEY) || '[]');
+    l.unshift({ t: Date.now(), what, name: name || '' });
+    localStorage.setItem(ACT_KEY, JSON.stringify(l.slice(0, 300)));
+  } catch { /* storage blocked: skip the log */ }
+}
+function actList() { try { return JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); } catch { return []; } }
+
+// ---- share: link (#inv=…) and file ----
+const b64u = bytes => { let s = ''; bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = str => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function invPack(obj) {
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  if (typeof CompressionStream === 'undefined') return 'j' + b64u(raw);
+  const buf = await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+  return 'z' + b64u(new Uint8Array(buf));
+}
+async function invUnpack(str) {
+  const bytes = unb64u(str.slice(1));
+  if (str[0] === 'j') return JSON.parse(new TextDecoder().decode(bytes));
+  const txt = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  return JSON.parse(txt);
+}
+async function invShareLink() {
+  const inv = invCapture();
+  inv.events = inv.events.map(ev => invSlim(ev, 3));
+  const url = `${location.origin}${location.pathname}#inv=${await invPack(inv)}`;
+  try { await navigator.clipboard.writeText(url); invMsg(`공유 링크를 복사했어요 (${Math.round(url.length / 1024 * 10) / 10}KB). 받는 사람은 링크를 열면 같은 화면을 봐요.`); }
+  catch { prompt('이 링크를 복사해 보내세요', url); }
+  logAct('공유 링크 복사', inv.name);
+}
+function invExport() {
+  const inv = invCapture();
+  const blob = new Blob([JSON.stringify(inv, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `조사-${inv.name.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 40)}.json`;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  invMsg('파일로 내보냈어요.');
+  logAct('파일로 내보내기', inv.name);
+}
+async function invImportFile(file) {
+  try {
+    const inv = JSON.parse(await file.text());
+    if (!invValid(inv)) throw new Error('bad');
+    invApply(inv);
+    invMsg(`"${inv.name}"을(를) 열었어요. 계속 쓰려면 저장을 누르세요.`);
+  } catch { invMsg('조사 파일로 읽을 수 없어요. Watchfloor에서 내보낸 .json 파일인지 확인해 주세요.', true); }
+}
+async function invFromHash() {
+  const m = location.hash.match(/^#inv=([\w-]+)$/);
+  if (!m) return;
+  try {
+    const inv = await invUnpack(m[1]);
+    if (!invValid(inv)) throw new Error('bad');
+    history.replaceState(null, '', location.pathname + location.search);
+    S.inv = null;   // a shared copy is a new investigation for this viewer
+    inv.id = 'inv-' + Date.now().toString(36);
+    invApply(inv);
+    selectTab('inv');
+    invMsg(`공유받은 조사 "${inv.name}"을(를) 열었어요. 저장을 누르면 이 브라우저에 보관돼요.`);
+  } catch { selectTab('inv'); renderInv(); invMsg('공유 링크를 읽지 못했어요. 링크가 잘렸는지 확인해 주세요.', true); }
+}
+addEventListener('hashchange', invFromHash);
+
+// ---- panel ----
+function invSum() {
+  const nF = FACETS.reduce((n, [k]) => n + S.filters[k].size, 0);
+  const snaps = [...EV.values()].filter(ev => ev.snap).length;
+  return `선택 ${S.sel.size}건 · 연결 ${S.links.length}개 · 필터 ${nF}개${viewRange ? ' · 기간 지정' : ''}${S.screen ? ' · ' + SCREENS[S.screen].title : ''}${snaps ? ` · 보관 사본 ${snaps}건` : ''}`;
+}
+function renderInv() {
+  const box = $('invPane'); if (!box) return;
+  const list = invAll();
+  box.innerHTML = `
+    <div class="inv-cur">
+      <label class="fx-t" for="invName">지금 조사</label>
+      <input id="invName" type="text" maxlength="60" autocomplete="off" placeholder="예: 동해 미사일 발사 정리" value="${esc(S.inv?.name || '')}">
+      <label class="fx-t" for="invNote">메모</label>
+      <textarea id="invNote" rows="3" maxlength="2000">${esc(S.invNote)}</textarea>
+      <p class="inv-sum" id="invSum">${invSum()}</p>
+      <div class="inv-act">
+        <button type="button" class="btn" id="invSave">${S.inv ? '저장' : '새로 저장'}</button>
+        <button type="button" class="btn" id="invLink">공유 링크 복사</button>
+        <button type="button" class="btn" id="invFile">파일로 내보내기</button>
+        <button type="button" class="btn" id="invNew">새 조사</button>
+      </div>
+      <p class="inv-msg" id="invMsg" role="status" aria-live="polite"></p>
+    </div>
+    <div class="fx-t inv-lh">이 브라우저에 저장한 조사 <span>${list.length}</span></div>
+    <ul class="inv-list">${list.map(x => `<li${S.inv?.id === x.id ? ' class="cur"' : ''}><button type="button" class="inv-open" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><span>사건 ${x.events.length} · 연결 ${(x.links || []).length} · ${ago(x.updated)}</span></button><button type="button" class="inv-del" data-id="${esc(x.id)}" aria-label="${esc(x.name)} 지우기">지우기</button></li>`).join('') || '<li class="none">아직 저장한 조사가 없어요. 사건을 고르고(Shift+클릭) 검색 확장을 한 뒤 저장해 보세요.</li>'}</ul>
+    <div class="inv-act"><button type="button" class="btn" id="invImport">파일에서 불러오기</button><input type="file" id="invFileIn" accept=".json,application/json" hidden></div>
+    <details class="inv-log"><summary class="fx-t">이 브라우저의 작업 기록</summary><ul>${actList().slice(0, 40).map(a => `<li><span class="st">${fmt(a.t, 'Asia/Seoul')}</span> ${esc(a.what)}${a.name ? ' · ' + esc(a.name) : ''}</li>`).join('') || '<li class="st">아직 기록이 없어요</li>'}</ul></details>
+    <p class="note">조사는 이 브라우저에만 저장돼요. 다른 기기나 사람에게는 링크나 파일로 넘겨 주세요.</p>`;
+  $('invSave').addEventListener('click', invSave);
+  $('invLink').addEventListener('click', invShareLink);
+  $('invFile').addEventListener('click', invExport);
+  $('invNew').addEventListener('click', invNew);
+  $('invImport').addEventListener('click', () => $('invFileIn').click());
+  $('invFileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) invImportFile(f); });
+  $('invNote').addEventListener('input', e => { S.invNote = e.target.value; });
+  box.querySelectorAll('.inv-open').forEach(b => b.addEventListener('click', () => { const inv = invAll().find(x => x.id === b.dataset.id); if (inv) { invApply(inv); invMsg(`"${inv.name}"을(를) 열었어요.`); } }));
+  box.querySelectorAll('.inv-del').forEach(b => b.addEventListener('click', () => invDelete(b.dataset.id)));
+}
+$('tabInv').addEventListener('click', () => { selectTab('inv'); renderInv(); });
+
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
 function addQuake(q, live) {
@@ -2234,6 +2459,7 @@ function endBoot(st) {
   await add('<span class="h">WATCHFLOOR</span>');
   await add('실시간 감시 콘솔 초기화 중…');
   const st = await init();
+  await invFromHash();
   const S = st.status || {};
   const okTag = s => s === 'ok' || s === 'ready' ? '<b>[ OK ]</b>' : s === 'snapshot' || s === 'wait' ? '<em>[ .. ]</em>' : '<em>[ -- ]</em>';
   await add(`${okTag(S.usgs)} USGS 지진 · ${events.filter(e => e.src !== 'jma').length}건${S.usgs === 'snapshot' ? ' (오프라인 스냅샷)' : ''}`);
