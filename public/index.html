@@ -495,6 +495,8 @@ button { font-family: inherit; }
 .flat-wrap { flex: 1; position: relative; min-height: 0; overflow: hidden; }
 #flatCv { display: block; touch-action: none; cursor: grab; }
 .flat-tip { position: absolute; pointer-events: none; font: 12px var(--f-body); background: rgba(9,15,24,.94); border: 1px solid var(--line); padding: 6px 9px; border-radius: 4px; max-width: 250px; line-height: 1.45; }
+.g-sel { font: 12px var(--f-body); color: var(--fg); background: rgba(9,15,24,.85); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+.g-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .av-h .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #app[data-view="flat"] .cam, #app[data-view="flat"] .banner { display: none; }
 #app[data-view="flat"] .dossier { z-index: 6; }
@@ -553,9 +555,9 @@ button { font-family: inherit; }
   </aside>
 
   <section class="appview" id="graphApp" hidden aria-label="그래프">
-    <div class="av-h"><span class="av-t">그래프</span><span class="av-n" id="graphNote"></span><button type="button" class="btn" id="graphFit">맞춤</button><button type="button" class="btn" id="graphClear">선택 지우기</button></div>
+    <div class="av-h"><span class="av-t">그래프</span><span class="av-n" id="graphNote"></span><label class="vh" for="graphLayout">배치</label><select id="graphLayout" class="g-sel"><option value="cose">자동 배치</option><option value="concentric">동심원 (심각도)</option><option value="breadthfirst">계층</option><option value="circle">원형</option><option value="grid">격자</option><option value="time">시간순 · 유형별 줄</option><option value="manual">직접 배치</option></select><label class="g-chk"><input type="checkbox" id="gHideC">나라 숨김</label><label class="g-chk"><input type="checkbox" id="gHideS">출처 숨김</label><button type="button" class="btn" id="graphFit">맞춤</button><button type="button" class="btn" id="graphPng">PNG</button><button type="button" class="btn" id="graphClear">선택 지우기</button></div>
     <div id="cy"></div>
-    <div class="av-f">사건 노드를 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 나라나 출처 노드를 누르면 그걸로 좁혀요 · 사건에서 오른쪽 클릭은 반경 300km 확장</div>
+    <div class="av-f">노드를 끌어 놓으면 "직접 배치"로 바뀌고 그 자리가 조사에 저장돼요 · 사건 노드를 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 나라나 출처 노드를 누르면 그걸로 좁혀요 · 사건에서 오른쪽 클릭은 반경 300km 확장</div>
   </section>
   <section class="appview" id="flatApp" hidden aria-label="평면 지도">
     <div class="av-h"><span class="av-t">평면 지도</span><span class="av-n" id="flatNote"></span><button type="button" class="btn" id="flatLasso" aria-pressed="false">영역 선택</button><button type="button" class="btn" id="flatHeat" aria-pressed="false">히트맵</button><button type="button" class="btn" id="flatZoomIn" aria-label="확대">+</button><button type="button" class="btn" id="flatZoomOut" aria-label="축소">−</button><button type="button" class="btn" id="flatFit">전체</button><button type="button" class="btn" id="flatClear">선택 지우기</button></div>
@@ -1736,7 +1738,8 @@ const S = {
   filters: { type: new Set(), country: new Set(), source: new Set(), sev: new Set() },
   sel: new Set(),           // selected event ids
   links: [],                // Search Around edges: { a, b, label, k }
-  extra: new Map()          // non-event nodes added by Search Around (facilities)
+  extra: new Map(),         // non-event nodes added by Search Around (facilities)
+  graph: { layout: 'cose', pos: {}, hide: { country: false, source: false } }   // graph layout, saved with investigations
 };
 const FACETS = [['type', '유형'], ['country', '나라'], ['source', '출처'], ['sev', '심각도']];
 const KO_COUNTRY = { 'South Korea': '한국', 'North Korea': '북한', Japan: '일본', China: '중국', Taiwan: '대만', Russia: '러시아', Ukraine: '우크라이나', Israel: '이스라엘', Palestine: '팔레스타인', Lebanon: '레바논', Syria: '시리아', Iran: '이란', Iraq: '이라크', Yemen: '예멘', 'Saudi Arabia': '사우디', Turkey: '튀르키예', Egypt: '이집트', Afghanistan: '아프가니스탄', Pakistan: '파키스탄', India: '인도', Indonesia: '인도네시아', Philippines: '필리핀', Vietnam: '베트남', Thailand: '태국', Myanmar: '미얀마', Malaysia: '말레이시아', Australia: '호주', 'New Zealand': '뉴질랜드', 'Papua New Guinea': '파푸아뉴기니', Vanuatu: '바누아투', Fiji: '피지', Tonga: '통가', 'United States of America': '미국', 'United States': '미국', Canada: '캐나다', Mexico: '멕시코', Guatemala: '과테말라', Colombia: '콜롬비아', Peru: '페루', Chile: '칠레', Argentina: '아르헨티나', Brazil: '브라질', Ecuador: '에콰도르', Venezuela: '베네수엘라', 'United Kingdom': '영국', France: '프랑스', Germany: '독일', Italy: '이탈리아', Spain: '스페인', Greece: '그리스', Poland: '폴란드', Belgium: '벨기에', Netherlands: '네덜란드', Sudan: '수단', 'South Sudan': '남수단', Ethiopia: '에티오피아', Somalia: '소말리아', Kenya: '케냐', Nigeria: '나이지리아', 'Dem. Rep. Congo': '콩고민주공화국', 'South Africa': '남아공', Libya: '리비아', Mongolia: '몽골', Nepal: '네팔', Bangladesh: '방글라데시', Tajikistan: '타지키스탄', Kazakhstan: '카자흐스탄', Iceland: '아이슬란드', Greenland: '그린란드', Cuba: '쿠바', Haiti: '아이티' };
@@ -1942,9 +1945,9 @@ function graphData() {
     const short = ev.type === 'quake' && quakeMag(ev) ? 'M' + quakeMag(ev) + ' ' + ev.place : ev.title;
     addN(ev.id, { label: short.length > 28 ? short.slice(0, 27) + '…' : short, k: 'ev', color: tcol(ev.type), size: 14 + ev.severity * 4, sel: S.sel.has(ev.id) ? 1 : 0 });
     const c = evCountry(ev);
-    addN('c:' + c, { label: c, k: 'country', color: '#9fb3c8', size: 16 });
-    edges.push({ data: { id: ev.id + '>c', source: ev.id, target: 'c:' + c, label: '위치', k: 'loc' } });
-    ev.sources.slice(0, 4).forEach(src => {
+    if (!S.graph.hide.country) addN('c:' + c, { label: c, k: 'country', color: '#9fb3c8', size: 16 });
+    if (!S.graph.hide.country) edges.push({ data: { id: ev.id + '>c', source: ev.id, target: 'c:' + c, label: '위치', k: 'loc' } });
+    if (!S.graph.hide.source) ev.sources.slice(0, 4).forEach(src => {
       addN('s:' + src, { label: src, k: 'source', color: '#b48cff', size: 11 });
       edges.push({ data: { id: ev.id + '>s:' + src, source: ev.id, target: 's:' + src, label: '보도', k: 'src' } });
     });
@@ -1984,17 +1987,71 @@ function renderGraph() {
     });
     cy.on('mouseover', 'node', e => { const n = e.target; cy.elements().addClass('dim'); n.closedNeighborhood().removeClass('dim'); });
     cy.on('mouseout', 'node', () => cy.elements().removeClass('dim'));
+    cy.on('dragfree', 'node', e => {
+      if (S.graph.layout !== 'manual') { cy.nodes().forEach(n => { S.graph.pos[n.id()] = { ...n.position() }; }); S.graph.layout = 'manual'; $('graphLayout').value = 'manual'; }
+      const p = e.target.position(); S.graph.pos[e.target.id()] = { x: Math.round(p.x), y: Math.round(p.y) };
+    });
     cy.on('layoutstop', () => { if (cy.zoom() > 1.3) { cy.zoom(1.3); cy.center(); } });
     cy.on('cxttap', 'node[k="ev"]', e => { const ev = EV.get(e.target.id()); if (ev) { searchAround(ev, 'near'); } });
   }
   const keep = new Set([...nodes.map(n => n.data.id), ...edges.map(e => e.data.id)]);
+  let changed = graphRelayout;
   cy.batch(() => {
-    cy.elements().filter(el => !keep.has(el.id())).remove();
-    nodes.forEach(n => { const el = cy.getElementById(n.data.id); el.nonempty() ? el.data(n.data) : cy.add({ group: 'nodes', ...n }); });
-    edges.forEach(e => { if (cy.getElementById(e.data.id).empty()) cy.add({ group: 'edges', ...e }); });
+    const gone = cy.elements().filter(el => !keep.has(el.id()));
+    if (gone.length) changed = true;
+    gone.remove();
+    nodes.forEach(n => { const el = cy.getElementById(n.data.id); if (el.nonempty()) el.data(n.data); else { const p = S.graph.pos[n.data.id]; cy.add({ group: 'nodes', ...n, ...(p ? { position: { x: p.x, y: p.y } } : {}) }); changed = true; } });
+    edges.forEach(e => { if (cy.getElementById(e.data.id).empty()) { cy.add({ group: 'edges', ...e }); changed = true; } });
   });
   cy.resize();
-  cy.layout({ name: 'cose', animate: !reduce, animationDuration: 500, nodeRepulsion: () => 9000, idealEdgeLength: () => 70, padding: 30, randomize: false }).run();
+  graphRelayout = false;
+  if ($('graphLayout').value !== S.graph.layout) $('graphLayout').value = S.graph.layout;
+  $('gHideC').checked = S.graph.hide.country; $('gHideS').checked = S.graph.hide.source;
+  // re-arrange only when the picture changed, so hand-placed nodes stay put
+  if (changed) runGraphLayout();
+}
+let graphRelayout = false;
+const TYPE_LANE = ['quake', 'tsunami', 'conflict', 'disaster', 'accident', 'news'];
+let graphRun = null;
+function runGraphLayout() {
+  graphRun?.stop(); cy.nodes().stop(true);
+  const L = S.graph.layout, anim = !reduce, base = { animate: anim, animationDuration: 450, padding: 30 };
+  const cyl = o => (graphRun = cy.layout(o));
+  if (L === 'manual') {
+    const known = Object.values(S.graph.pos), cx = known.length ? known.reduce((s, p) => s + p.x, 0) / known.length : 0, cyy = known.length ? known.reduce((s, p) => s + p.y, 0) / known.length : 0;
+    cyl({ name: 'preset', ...base, fit: false, positions: n => S.graph.pos[n.id()] || { x: cx + (Math.random() - 0.5) * 160, y: cyy + (Math.random() - 0.5) * 160 } }).run();
+  } else if (L === 'time') {
+    const evs = cy.nodes('[k="ev"]').map(n => EV.get(n.id())).filter(Boolean);
+    const t0 = Math.min(...evs.map(e => e.start)), t1 = Math.max(...evs.map(e => e.start), t0 + 1);
+    const pos = {};
+    evs.forEach(e => { pos[e.id] = { x: (e.start - t0) / (t1 - t0) * 1600, y: Math.max(0, TYPE_LANE.indexOf(e.type)) * 140 }; });
+    cy.nodes().forEach(n => {
+      if (pos[n.id()]) return;
+      const nb = n.neighborhood('node').filter(m => pos[m.id()]);
+      const x = nb.length ? nb.reduce((s, m) => s + pos[m.id()].x, 0) / nb.length : 800;
+      const k = n.data('k');
+      pos[n.id()] = { x: x + (Math.random() - 0.5) * 40, y: k === 'country' ? -160 : k === 'source' ? TYPE_LANE.length * 140 + 30 : -300 };
+    });
+    cyl({ name: 'preset', ...base, positions: n => pos[n.id()] }).run();
+  } else if (L === 'concentric') cyl({ name: 'concentric', ...base, concentric: n => n.data('k') === 'ev' ? n.data('size') : n.data('k') === 'obj' ? 20 : 1, levelWidth: () => 6, minNodeSpacing: 18 }).run();
+  else if (L === 'breadthfirst') { const roots = cy.nodes('[sel=1]').length ? cy.nodes('[sel=1]') : cy.nodes('[k="ev"]'); cyl({ name: 'breadthfirst', ...base, roots, spacingFactor: 1.05, directed: false }).run(); }
+  else if (L === 'circle' || L === 'grid') cyl({ name: L, ...base, avoidOverlap: true }).run();
+  else cyl({ name: 'cose', ...base, nodeRepulsion: () => 9000, idealEdgeLength: () => 70, randomize: false }).run();
+}
+function setGraphLayout(v) {
+  if (v === 'manual' && !Object.keys(S.graph.pos).length) cy?.nodes().forEach(n => { S.graph.pos[n.id()] = { ...n.position() }; });
+  if (v !== 'manual') S.graph.pos = {};
+  S.graph.layout = v; graphRelayout = true;
+  if (S.app === 'graph') renderGraph();
+}
+function graphPNG() {
+  if (!cy) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(cy.png({ full: true, scale: 2, bg: '#05080d', output: 'blob' }));
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  a.download = `그래프-${(S.inv?.name || 'watchfloor').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 40)}.png`;
+  document.body.append(a); a.click(); a.remove();
+  logAct('그래프 이미지 저장', S.inv?.name || '');
 }
 
 // ---- table app ----
@@ -2020,6 +2077,10 @@ document.querySelectorAll('.apps button').forEach(b => b.addEventListener('click
 $('tabFacets').addEventListener('click', () => { selectTab('facets'); renderFacets(); });
 $('graphFit').addEventListener('click', () => cy && cy.fit(undefined, 30));
 $('graphClear').addEventListener('click', clearSelection);
+$('graphLayout').addEventListener('change', e => setGraphLayout(e.target.value));
+$('gHideC').addEventListener('change', e => { S.graph.hide.country = e.target.checked; renderGraph(); });
+$('gHideS').addEventListener('change', e => { S.graph.hide.source = e.target.checked; renderGraph(); });
+$('graphPng').addEventListener('click', graphPNG);
 
 // ================= TYPE SCREENS (지진 · 재난 · 항공 · 뉴스) =================
 // Each screen keeps the globe, narrows the shared filters to its type and docks a
@@ -2207,6 +2268,7 @@ function invCapture() {
     created: S.inv?.created || Date.now(), updated: Date.now(),
     filters: Object.fromEntries(FACETS.map(([k]) => [k, [...S.filters[k]]])),
     sel: [...S.sel], links: S.links.slice(), extra: [...S.extra.values()], notes: Object.fromEntries(S.notes), merges: S.merges.map(m => ({ ...m })),
+    graph: { layout: S.graph.layout, hide: { ...S.graph.hide }, pos: Object.fromEntries(Object.entries(S.graph.pos).map(([k, p]) => [k, { x: Math.round(p.x), y: Math.round(p.y) }])) },
     app: S.app, screen: S.screen || null, range: viewRange ? viewRange.slice() : null,
     pov: { lat: +pov.lat.toFixed(3), lng: +pov.lng.toFixed(3), altitude: +pov.altitude.toFixed(2) },
     note: ($('invNote')?.value ?? S.invNote) || '',
@@ -2233,6 +2295,10 @@ function invApply(inv) {
   S.notes = new Map(Object.entries(inv.notes || {}).filter(([, v]) => typeof v === 'string'));
   S.merges = (inv.merges || []).filter(m => m && EV.has(m.into) && EV.has(m.from));
   refreshMerges();
+  S.graph = { layout: 'cose', pos: {}, ...(inv.graph || {}) };
+  S.graph.hide = { country: !!inv.graph?.hide?.country, source: !!inv.graph?.hide?.source };
+  if (typeof S.graph.pos !== 'object' || !S.graph.pos) S.graph.pos = {};
+  graphRelayout = true;
   setRange(Array.isArray(inv.range) && inv.range.length === 2 ? inv.range : null);
   setApp(['map', 'flat', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
   if (inv.pov && isFinite(inv.pov.lat)) { ctl.autoRotate = false; world.pointOfView(inv.pov, T(1500)); }
@@ -2256,6 +2322,7 @@ function invNew() {
   S.inv = null; S.invNote = '';
   FACETS.forEach(([k]) => S.filters[k].clear());
   S.sel.clear(); S.links = []; S.extra.clear(); S.notes.clear(); S.merges = []; refreshMerges();
+  S.graph = { layout: 'cose', pos: {}, hide: { country: false, source: false } }; graphRelayout = true;
   setRange(null);
   emit(); renderInv(); restorePaths();
 }
