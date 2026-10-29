@@ -4,6 +4,7 @@
 //   P2PQuake    : Japan Meteorological Agency quake reports, Earthquake Early Warnings, tsunami notices (every 15 s)
 //   ADS-B       : live aircraft around a point (airplanes.live / adsb.fi / adsb.lol, on request)
 //   Windy       : live webcams around a point (on request, needs WINDY_API_KEY)
+//   YouTube     : news videos related to a headline (on request; YOUTUBE_API_KEY optional)
 //   Claude      : AI situation briefing (on request, needs ANTHROPIC_API_KEY)
 // Run:  node server.js        (live)
 //       node server.js --demo (offline, replays a bundled snapshot)
@@ -33,6 +34,7 @@ const WINDY_KEY = process.env.WINDY_API_KEY || '';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const AIS_KEY = process.env.AISSTREAM_API_KEY || '';
+const YT_KEY = process.env.YOUTUBE_API_KEY || '';
 const HOSTED = !!(process.env.RENDER || process.env.HOST === '0.0.0.0');
 const HOST = process.env.HOST || (process.env.RENDER ? '0.0.0.0' : '127.0.0.1');
 // On a public site the paid AI briefing only runs with a password.
@@ -251,6 +253,60 @@ async function webcams(lat, lng) {
   return { cams: out.slice(0, 6) };
 }
 
+// ---------- YouTube news videos ----------
+// Finds recent videos for a headline. With YOUTUBE_API_KEY it uses the Data API;
+// without one it reads YouTube's public search page (results from the past week).
+const ytCache = new Map();          // query -> { t, body }
+function ytWalk(o, out) {
+  if (!o || typeof o !== 'object' || out.length >= 8) return;
+  if (Array.isArray(o)) { for (const x of o) ytWalk(x, out); return; }
+  const v = o.videoRenderer;
+  if (v && v.videoId && !v.upcomingEventData) {
+    const txt = t => t?.simpleText || (t?.runs || []).map(r => r.text).join('') || '';
+    const live = /"style":"(BADGE_STYLE_TYPE_LIVE_NOW|LIVE)"/.test(JSON.stringify([v.badges, v.thumbnailOverlays]));
+    out.push({ id: v.videoId, title: txt(v.title).slice(0, 140), channel: txt(v.ownerText || v.longBylineText), age: txt(v.publishedTimeText), len: txt(v.lengthText), live });
+    return;
+  }
+  for (const k in o) ytWalk(o[k], out);
+}
+function ytParse(html) {
+  const m = html.match(/ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s);
+  if (!m) return [];
+  let j; try { j = JSON.parse(m[1]); } catch { return []; }
+  const out = []; ytWalk(j, out);
+  return out.filter(v => /^[\w-]{11}$/.test(v.id));
+}
+async function ytSearch(q) {
+  if (YT_KEY) {
+    const after = new Date(Date.now() - 7 * 864e5).toISOString();
+    const j = await getJSON(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=6&order=relevance&publishedAfter=${after}&q=${encodeURIComponent(q)}&key=${YT_KEY}`);
+    return (j.items || []).map(i => ({ id: i.id?.videoId, title: i.snippet?.title || '', channel: i.snippet?.channelTitle || '', age: i.snippet?.publishedAt ? new Date(i.snippet.publishedAt).toISOString().slice(0, 10) : '', len: '', live: i.snippet?.liveBroadcastContent === 'live' })).filter(v => v.id);
+  }
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 10000);
+  try {
+    // sp=EgQIAxAB : uploaded this week, videos only
+    const r = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgQIAxAB`, { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', 'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8', Cookie: 'CONSENT=YES+1; SOCS=CAI' } });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return ytParse(await r.text());
+  } finally { clearTimeout(t); }
+}
+async function ytNews(q) {
+  q = String(q || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!q) return { status: 400, body: { error: '검색어가 필요해요' } };
+  if (DEMO) return { status: 200, body: { videos: [], demo: true } };
+  const hit = ytCache.get(q);
+  if (hit && Date.now() - hit.t < 30 * 60e3) return { status: 200, body: hit.body };
+  try {
+    const body = { videos: (await ytSearch(q)).slice(0, 6), source: YT_KEY ? 'api' : 'search' };
+    ytCache.set(q, { t: Date.now(), body });
+    if (ytCache.size > 300) ytCache.delete(ytCache.keys().next().value);
+    return { status: 200, body };
+  } catch (e) {
+    log('YouTube error:', e.message);
+    return { status: 200, body: { videos: [], error: '유튜브 검색에 실패했어요' } };
+  }
+}
+
 // ---------- AI briefing (Claude) ----------
 let anthropic = null, lastBrief = 0;
 async function aiBrief(payload, password) {
@@ -340,6 +396,10 @@ const server = http.createServer(async (req, res) => {
       const lat = +u.searchParams.get('lat'), lng = +u.searchParams.get('lng');
       if (!isFinite(lat) || !isFinite(lng)) return send(res, 400, { error: 'lat, lng가 필요해요' });
       return send(res, 200, await webcams(lat, lng));
+    }
+    if (p === '/api/ytnews') {
+      const r = await ytNews(u.searchParams.get('q'));
+      return send(res, r.status, r.body);
     }
     if (p === '/api/brief' && req.method === 'POST') {
       const r = await aiBrief(await readBody(req), req.headers['x-admin-password'] || '');

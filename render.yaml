@@ -17,3 +17,5 @@ services:
         sync: false
       - key: AISSTREAM_API_KEY
         sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
