@@ -353,6 +353,13 @@ button { font-family: inherit; }
 .cam .alts button { font: 11px var(--f-body); color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cam .alts button[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
 .cam .meta { font: 11px var(--f-mono); color: var(--muted); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam.news { width: 380px; padding-top: 8px; }
+.cam.news .hd { padding-right: 26px; }
+.cam.news .hd .rec { color: var(--accent); animation: none; }
+.cam.news .close { top: 2px; right: 2px; }
+.cam.news .view .msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; font: 12px/1.6 var(--f-body); color: var(--muted); }
+.cam.news .q { font: 11px var(--f-body); color: var(--muted); margin: -2px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .cam.news { display: block; top: calc(var(--band) + 110px); bottom: auto; left: var(--gl); right: var(--gr); width: auto; z-index: 7; } }
 .ai { margin: 4px 0 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ai .btn { padding: 6px 10px; }
 .ai small { color: var(--muted); font-size: 11px; }
@@ -1190,6 +1197,55 @@ async function showCam(e) {
   play(playable[0]);
 }
 
+// ================= NEWS VIDEO POPUP =================
+// For events that come from a news article, show related YouTube news clips instead of a webcam.
+function newsQuery(title) {
+  return String(title || '')
+    .replace(/\s+[-–|·]\s+[^-–|·]{2,40}$/, '')            // " - Outlet" suffix
+    .replace(/^\s*(\[[^\]]{1,12}\]|【[^】]{1,12}】|\([^)]{1,12}\))\s*/g, '') // [속보] (2보) …
+    .replace(/["'“”‘’]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90);
+}
+async function showNewsVideo(e) {
+  const forId = e.id, q = newsQuery(e.title);
+  if (!q) return showCam(e);
+  const ytSearch = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+  const c = document.createElement('section');
+  c.className = 'cam news';
+  c.setAttribute('aria-label', '관련 뉴스 영상');
+  c.innerHTML = `<button class="close" type="button" aria-label="영상 닫기">×</button>
+    <div class="hd"><span>관련 뉴스 영상</span><span class="rec">● 찾는 중</span></div>
+    <div class="q" title="${esc(q)}">검색어 · ${esc(q)}</div>
+    <div class="view" id="camView"><div class="msg">유튜브에서 관련 영상을 찾는 중이에요</div></div>
+    <div class="meta" id="camMeta"></div><div class="alts" id="camAlts"></div>
+    <div class="links"><a href="${ytSearch}" target="_blank" rel="noopener">유튜브에서 더 보기</a>${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">기사 원문</a>` : ''}</div>`;
+  c.querySelector('.close').addEventListener('click', () => { if (camEl === c) camEl = null; c.remove(); });
+  $('app').append(c);
+  camEl = c;
+  let j = {};
+  try { j = await (await fetch('api/ytnews?q=' + encodeURIComponent(q))).json(); } catch { j = { error: '서버에 연결하지 못했어요' }; }
+  if (currentId !== forId || camEl !== c) return;
+  const vids = j.videos || [];
+  if (!vids.length) {
+    c.querySelector('.msg').innerHTML = `${j.demo ? '데모 모드에서는 영상을 찾지 않아요' : j.error ? esc(j.error) : '최근 일주일 안에 올라온 관련 영상이 없어요'}<br>아래 링크로 유튜브에서 찾아보세요`;
+    c.querySelector('.rec').textContent = '● 영상 없음';
+    return;
+  }
+  const play = v => {
+    $('camView').innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?autoplay=1&mute=1&playsinline=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="${esc(v.title)}"></iframe>`;
+    $('camMeta').textContent = [v.channel, v.live ? 'LIVE' : v.age, v.len].filter(Boolean).join(' · ') + ' · ' + v.title;
+    $('camMeta').title = v.title;
+    c.querySelector('.rec').textContent = v.live ? '● LIVE' : '● 재생';
+    $('camAlts').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b._v === v));
+  };
+  vids.slice(0, 5).forEach((v, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b._v = v;
+    b.textContent = `${i + 1}. ${v.channel ? v.channel + ' · ' : ''}${v.title}`; b.title = v.title;
+    b.addEventListener('click', () => play(v));
+    $('camAlts').append(b);
+  });
+  play(vids[0]);
+}
+
 // ================= TSUNAMI NOTICE =================
 function tsunamiFocus(a, ev) {
   clearTimeout(resumeTimer); clearFx();
@@ -1364,7 +1420,10 @@ function eventFocus(ev, manual) {
     world.htmlElementsData([{ mk: 'ev', ev, lat: ev.lat, lng: ev.lng }]);
   }, T(1150));
   dossierTimer = setTimeout(() => showEventCard(ev), T(2700));
-  if (manual || ev.severity >= 3 || ev.flash) camTimer = setTimeout(() => showCam({ id: ev.id, lat: ev.lat, lng: ev.lng, place: a?.place || ev.place }), T(4400));
+  const isNews = a?.kind === 'news';
+  if (manual || ev.severity >= 3 || ev.flash) camTimer = setTimeout(() => isNews
+    ? showNewsVideo({ id: ev.id, title: a.title || ev.title, link: a.link })
+    : showCam({ id: ev.id, lat: ev.lat, lng: ev.lng, place: a?.place || ev.place }), T(isNews ? 3200 : 4400));
   resumeTimer = setTimeout(resume, T(manual ? 60000 : 28000));
 }
 function showEventCard(ev) {
