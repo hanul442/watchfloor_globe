@@ -465,6 +465,16 @@ button { font-family: inherit; }
 .inv-log ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; max-height: 180px; overflow-y: auto; }
 .inv-log li { padding: 3px 0; }
 .inv .note { font-size: 11px; color: var(--muted); line-height: 1.5; }
+/* ---------- reports / alerts ---------- */
+.al-form { display: grid; grid-template-columns: 52px 1fr; gap: 6px 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.al-form select { font: 13px var(--f-body); color: var(--fg); background: rgba(9,15,24,.85); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+.al-r { flex: 1; display: grid; gap: 2px; padding: 8px 6px; min-width: 0; }
+.al-r b { font: 600 13px var(--f-body); }
+.al-r span { font: 11px var(--f-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.al-tog[aria-pressed="true"] { color: var(--cyan); }
+.al-toasts { position: absolute; z-index: 8; left: 50%; transform: translateX(-50%); top: calc(var(--band) + 70px); display: grid; gap: 8px; width: min(420px, calc(100% - 32px)); pointer-events: none; }
+.al-toast { pointer-events: auto; text-align: left; display: grid; gap: 3px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; cursor: pointer; font: 13px var(--f-body); backdrop-filter: blur(6px); animation: dossierIn .3s ease-out; }
+.al-toast b { font-weight: 600; }
 </style>
 
 </head>
@@ -490,6 +500,7 @@ button { font-family: inherit; }
     </div></details>
   </div>
 
+  <div class="al-toasts" id="alToasts" aria-live="polite"></div>
   <aside class="typepanel" id="typePanel" hidden aria-label="유형별 전용 화면"></aside>
 
   <aside class="rail">
@@ -2304,6 +2315,7 @@ function renderInv() {
         <button type="button" class="btn" id="invSave">${S.inv ? '저장' : '새로 저장'}</button>
         <button type="button" class="btn" id="invLink">공유 링크 복사</button>
         <button type="button" class="btn" id="invFile">파일로 내보내기</button>
+        <button type="button" class="btn" id="invReport">보고서 만들기</button>
         <button type="button" class="btn" id="invNew">새 조사</button>
       </div>
       <p class="inv-msg" id="invMsg" role="status" aria-live="polite"></p>
@@ -2311,12 +2323,15 @@ function renderInv() {
     <div class="fx-t inv-lh">이 브라우저에 저장한 조사 <span>${list.length}</span></div>
     <ul class="inv-list">${list.map(x => `<li${S.inv?.id === x.id ? ' class="cur"' : ''}><button type="button" class="inv-open" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><span>사건 ${x.events.length} · 연결 ${(x.links || []).length} · ${ago(x.updated)}</span></button><button type="button" class="inv-del" data-id="${esc(x.id)}" aria-label="${esc(x.name)} 지우기">지우기</button></li>`).join('') || '<li class="none">아직 저장한 조사가 없어요. 사건을 고르고(Shift+클릭) 검색 확장을 한 뒤 저장해 보세요.</li>'}</ul>
     <div class="inv-act"><button type="button" class="btn" id="invImport">파일에서 불러오기</button><input type="file" id="invFileIn" accept=".json,application/json" hidden></div>
+    <div id="alBox"></div>
     <details class="inv-log"><summary class="fx-t">이 브라우저의 작업 기록</summary><ul>${actList().slice(0, 40).map(a => `<li><span class="st">${fmt(a.t, 'Asia/Seoul')}</span> ${esc(a.what)}${a.name ? ' · ' + esc(a.name) : ''}</li>`).join('') || '<li class="st">아직 기록이 없어요</li>'}</ul></details>
     <p class="note">조사는 이 브라우저에만 저장돼요. 다른 기기나 사람에게는 링크나 파일로 넘겨 주세요.</p>`;
   $('invSave').addEventListener('click', invSave);
   $('invLink').addEventListener('click', invShareLink);
   $('invFile').addEventListener('click', invExport);
   $('invNew').addEventListener('click', invNew);
+  $('invReport').addEventListener('click', openReport);
+  renderAlerts();
   $('invImport').addEventListener('click', () => $('invFileIn').click());
   $('invFileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) invImportFile(f); });
   $('invNote').addEventListener('input', e => { S.invNote = e.target.value; });
@@ -2324,6 +2339,161 @@ function renderInv() {
   box.querySelectorAll('.inv-del').forEach(b => b.addEventListener('click', () => invDelete(b.dataset.id)));
 }
 $('tabInv').addEventListener('click', () => { selectTab('inv'); renderInv(); });
+
+// ================= REPORTS (보고서) =================
+// A printable page built from the open investigation (or the filtered list when
+// nothing is selected). Opens in a new tab; the browser's print dialog saves it as PDF.
+function globeShot() {
+  try {
+    const r = world.renderer();
+    r.render(world.scene(), world.camera());
+    return r.domElement.toDataURL('image/jpeg', 0.82);
+  } catch { return null; }
+}
+function reportEvents() {
+  const ids = new Set([...S.sel, ...S.links.flatMap(l => [l.a, l.b])]);
+  const picked = [...ids].map(id => EV.get(id)).filter(Boolean);
+  return (picked.length ? picked : evList('all').slice(0, 30)).sort((a, b) => b.severity - a.severity || b.updated - a.updated);
+}
+function buildReport() {
+  const evs = reportEvents();
+  const name = ($('invName')?.value || '').trim() || S.inv?.name || '상황 보고서';
+  const note = ($('invNote')?.value ?? S.invNote) || '';
+  const filt = FACETS.map(([k, l]) => S.filters[k].size ? `${l}: ${[...S.filters[k]].map(v => facetLabel(k, v)).join(', ')}` : '').filter(Boolean).join(' · ');
+  const range = viewRange ? `${fmt(viewRange[0], 'Asia/Seoul')} – ${fmt(viewRange[1], 'Asia/Seoul')} KST` : '최근 7일 (실시간)';
+  const shot = globeShot();
+  const label = id => EV.get(id)?.title || S.extra.get(id)?.label || id;
+  const byType = {};
+  evs.forEach(ev => { byType[ev.type] = (byType[ev.type] || 0) + 1; });
+  const e = s => esc(String(s ?? ''));
+  const sevDots = n => '●'.repeat(n) + '○'.repeat(5 - n);
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(name)} · 보고서</title>
+<style>
+:root{--fg:#111;--mut:#5b6573;--line:#d5dbe3;--acc:#b8860b}
+body{font:14px/1.6 "IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--fg);background:#fff;margin:0}
+main{max-width:860px;margin:0 auto;padding:32px 24px 48px}
+.band{font:600 11px ui-monospace,monospace;letter-spacing:.18em;text-align:center;background:#1f6f3a;color:#fff;padding:4px}
+h1{font-size:26px;margin:18px 0 4px}h2{font-size:16px;margin:28px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--fg)}
+.meta{color:var(--mut);font-size:12px}.note{white-space:pre-wrap;background:#f6f7f9;border-left:3px solid var(--acc);padding:10px 14px;margin:14px 0}
+.kp{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.kp span{border:1px solid var(--line);border-radius:4px;padding:4px 10px;font-size:12px}
+img{width:100%;max-height:380px;object-fit:cover;border-radius:6px;border:1px solid var(--line);margin-top:12px}
+.ev{border-top:1px solid var(--line);padding:12px 0;break-inside:avoid}.ev h3{font-size:15px;margin:0 0 2px}
+.ev .m{font-size:12px;color:var(--mut)}.sev{font-family:ui-monospace,monospace;color:#c0392b;letter-spacing:1px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}td,th{text-align:left;padding:4px 6px 4px 0;border-top:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600}
+a{color:#1b4f9c}.tool{position:fixed;top:30px;right:16px}.tool button{font:600 13px sans-serif;padding:8px 14px;border-radius:4px;border:1px solid #333;background:#fff;cursor:pointer}
+@media print{.tool{display:none}main{padding:0}a{color:inherit}}
+</style></head><body><div class="band">UNCLASSIFIED // OSINT · 공개 출처 정보만 다뤄요</div>
+<div class="tool"><button onclick="print()">인쇄 · PDF로 저장</button></div>
+<main>
+<h1>${e(name)}</h1>
+<div class="meta">작성 ${fmt(Date.now(), 'Asia/Seoul')} KST · 기간 ${e(range)}${filt ? ' · ' + e(filt) : ''}</div>
+${note ? `<div class="note">${e(note)}</div>` : ''}
+<div class="kp"><span>사건 ${evs.length}건</span>${Object.entries(byType).map(([t, n]) => `<span>${e(TYPE[t]?.ko || t)} ${n}</span>`).join('')}<span>연결 ${S.links.length}개</span><span>심각도 4 이상 ${evs.filter(x => x.severity >= 4).length}건</span></div>
+${shot ? `<img src="${shot}" alt="지구본 화면">` : ''}
+<h2>사건</h2>
+${evs.map(ev => `<section class="ev"><h3>${e(ev.title)}</h3>
+<div class="m"><span class="sev">${sevDots(ev.severity)}</span> ${e(TYPE[ev.type]?.ko || ev.type)} · ${e(ev.place)} · ${e(evCountry(ev))} · ${ev.status === 'open' ? '진행 중' : '종료'} · 신뢰도 ${Math.round((ev.confidence || 0) * 100)}% · ${fmt(ev.start, 'Asia/Seoul')}–${fmt(ev.updated, 'Asia/Seoul')} KST${ev.snap ? ' · 보관 사본' : ''}</div>
+<table><thead><tr><th>시각(KST)</th><th>출처</th><th>내용</th></tr></thead><tbody>${ev.signals.slice(0, 12).map(s => `<tr><td>${fmt(s.time, 'Asia/Seoul')}</td><td>${e(s.src)}</td><td>${s.link ? `<a href="${e(s.link)}" target="_blank" rel="noopener">${e(s.title)}</a>` : e(s.title)}</td></tr>`).join('')}</tbody></table></section>`).join('')}
+${S.links.length ? `<h2>연결</h2><table><thead><tr><th>A</th><th>관계</th><th>B</th></tr></thead><tbody>${S.links.map(l => `<tr><td>${e(label(l.a))}</td><td>${e(l.label || l.k)}</td><td>${e(label(l.b))}</td></tr>`).join('')}</tbody></table>` : ''}
+<h2>출처와 한계</h2>
+<p class="meta">USGS, 일본 기상청(P2P지진정보), NASA EONET, 공개 뉴스 RSS를 자동으로 묶은 결과예요. 기사 위치는 제목의 지명으로 추정한 값이라 틀릴 수 있어요. 공식 발표가 없는 사건의 신뢰도는 보도한 언론사 수로만 계산했어요.</p>
+</main></body></html>`;
+  return { html, name };
+}
+function openReport() {
+  const { html, name } = buildReport();
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  const w = window.open(url, '_blank');
+  if (!w) {   // pop-up blocked: download instead
+    const a = document.createElement('a'); a.href = url; a.download = `보고서-${name.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 40)}.html`;
+    document.body.append(a); a.click(); a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  logAct('보고서 만들기', name);
+}
+
+// ================= ALERTS (저장한 검색 알림) =================
+// A rule is a saved set of filters (+ optional keyword and minimum severity).
+// New or growing live events that match raise an in-app notice, a browser
+// notification when allowed, and a sound when sound is on. Rules live in this browser.
+const AL_KEY = 'wf.alerts.v1';
+function alAll() { try { const l = JSON.parse(localStorage.getItem(AL_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch { return []; } }
+function alWrite(l) { try { localStorage.setItem(AL_KEY, JSON.stringify(l)); return true; } catch { return false; } }
+function alMatches(rule, ev) {
+  if (!rule.on) return false;
+  if (ev.severity < (rule.minSev || 1)) return false;
+  for (const [k] of FACETS) {
+    const f = rule.filters?.[k] || [];
+    if (f.length && !facetValues(ev, k).some(v => f.includes(v))) return false;
+  }
+  if (rule.q) {
+    const hay = (ev.title + ' ' + ev.place + ' ' + ev.signals.map(s => s.title).join(' ')).toLowerCase();
+    if (!rule.q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w))) return false;
+  }
+  return true;
+}
+function alDescribe(rule) {
+  const parts = FACETS.map(([k, l]) => (rule.filters?.[k] || []).length ? `${l} ${rule.filters[k].map(v => facetLabel(k, v)).join('/')}` : '').filter(Boolean);
+  if (rule.q) parts.push(`"${rule.q}"`);
+  parts.push(`심각도 ${rule.minSev}+`);
+  return parts.join(' · ');
+}
+function alCreate() {
+  const q = ($('alQ')?.value || '').trim().slice(0, 80);
+  const minSev = +($('alSev')?.value || 3);
+  const filters = Object.fromEntries(FACETS.map(([k]) => [k, [...S.filters[k]]]));
+  const rule = { id: 'al-' + Date.now().toString(36), name: ($('alName')?.value || '').trim().slice(0, 40) || alDescribe({ filters, q, minSev }), filters, q, minSev, on: true, hits: 0, last: null, created: Date.now() };
+  const l = alAll(); l.unshift(rule);
+  if (!alWrite(l.slice(0, 30))) { invMsg('알림 규칙을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.', true); return; }
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  renderAlerts();
+  logAct('알림 규칙 만들기', rule.name);
+}
+const alSeen = new Map();   // rule id -> Set of event ids already announced at a given severity
+function alCheck(ev, raw) {
+  if (!raw || !(raw.isNew || raw.rose || raw.newSignal)) return;
+  const rules = alAll(); let changed = false;
+  for (const r of rules) {
+    if (!alMatches(r, ev)) continue;
+    const seen = alSeen.get(r.id) || new Set(); alSeen.set(r.id, seen);
+    const key = ev.id + ':' + ev.severity;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    r.hits = (r.hits || 0) + 1; r.last = { t: Date.now(), ev: ev.id, title: ev.title }; changed = true;
+    alNotify(r, ev);
+  }
+  if (changed) { alWrite(rules); if (!$('alBox')?.contains(document.activeElement)) renderAlerts(); }
+}
+function alNotify(rule, ev) {
+  beep(ev.severity >= 4 ? 'crit' : 'hit');
+  const n = document.createElement('button');
+  n.type = 'button'; n.className = 'al-toast';
+  n.innerHTML = `<span class="fx-t">알림 · ${esc(rule.name)}</span><b>${esc(ev.title)}</b><span class="st">${esc(ev.place)} · 심각도 ${ev.severity}</span>`;
+  n.addEventListener('click', () => { n.remove(); openEvent(EV.get(ev.id) || ev, true); });
+  $('alToasts').append(n);
+  setTimeout(() => n.remove(), 15000);
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try { const no = new Notification(`Watchfloor 알림 · ${rule.name}`, { body: `${ev.title}\n${ev.place} · 심각도 ${ev.severity}`, tag: rule.id + ev.id }); no.onclick = () => { focus(); openEvent(EV.get(ev.id) || ev, true); }; } catch { /* not allowed here */ }
+  }
+}
+function renderAlerts() {
+  const box = $('alBox'); if (!box) return;
+  const l = alAll();
+  const nF = FACETS.reduce((n, [k]) => n + S.filters[k].size, 0);
+  box.innerHTML = `
+    <div class="fx-t inv-lh">저장한 검색 알림 <span>${l.length}</span></div>
+    <p class="note">지금 걸려 있는 필터${nF ? ` (${nF}개)` : '(없음 · 모든 사건)'}에 아래 조건을 더해 규칙을 만들어요. 맞는 사건이 새로 생기거나 커지면 알려 줘요.</p>
+    <div class="al-form">
+      <label for="alName">이름</label><input id="alName" type="text" maxlength="40" autocomplete="off" placeholder="비워 두면 조건으로 이름을 지어요">
+      <label for="alQ">단어</label><input id="alQ" type="text" maxlength="80" autocomplete="off" placeholder="예: 미사일 (빈칸이면 단어 조건 없음)">
+      <label for="alSev">심각도</label><select id="alSev"><option value="1">1 이상</option><option value="2">2 이상</option><option value="3" selected>3 이상</option><option value="4">4 이상</option><option value="5">5만</option></select>
+    </div>
+    <div class="inv-act"><button type="button" class="btn" id="alAdd">알림 규칙 만들기</button></div>
+    <ul class="inv-list">${l.map(r => `<li><div class="al-r"><b>${esc(r.name)}</b>${r.name !== alDescribe(r) ? `<span>${esc(alDescribe(r))}</span>` : ''}<span>${r.hits ? `${r.hits}번 울림 · 최근 ${ago(r.last.t)}: ${esc(r.last.title)}` : '아직 울리지 않았어요'}</span></div><button type="button" class="inv-del al-tog" data-id="${esc(r.id)}" aria-pressed="${r.on}">${r.on ? '켜짐' : '꺼짐'}</button><button type="button" class="inv-del al-del" data-id="${esc(r.id)}" aria-label="${esc(r.name)} 지우기">지우기</button></li>`).join('') || '<li class="none">알림 규칙이 없어요.</li>'}</ul>`;
+  $('alAdd').addEventListener('click', alCreate);
+  box.querySelectorAll('.al-tog').forEach(b => b.addEventListener('click', () => { const l2 = alAll(); const r = l2.find(x => x.id === b.dataset.id); if (r) { r.on = !r.on; alWrite(l2); renderAlerts(); } }));
+  box.querySelectorAll('.al-del').forEach(b => b.addEventListener('click', () => { const l2 = alAll(); const r = l2.find(x => x.id === b.dataset.id); if (r && confirm(`알림 규칙 "${r.name}"을(를) 지울까요?`)) { alWrite(l2.filter(x => x.id !== r.id)); renderAlerts(); logAct('알림 규칙 삭제', r.name); } }));
+}
 
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
@@ -2360,6 +2530,7 @@ function connectStream() {
     const raw = JSON.parse(m.data);
     const ev = upsertEvent(raw);
     refreshSoon();
+    alCheck(ev, raw);
     const sig = ev.signals.find(s => s.id === raw.newSignal);
     if (!sig || sig.kind === 'eew') return;
     if (sig.kind === 'tsunami') { if (!viewRange) { busy && !paused ? cinemaQueue.push({ mk: 'ev', ev }) : openEvent(ev); } return; }
