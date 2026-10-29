@@ -262,6 +262,10 @@ button { font-family: inherit; }
 .banner.ev { border-color: var(--tc, var(--news)); background: rgba(14, 22, 34, .9); text-transform: none; letter-spacing: .04em; max-width: min(760px, calc(100% - 32px)); overflow: hidden; text-overflow: ellipsis; animation-iteration-count: 2; }
 .dossier.ev { border-top-color: var(--tc); }
 .dossier.ev .kind { color: var(--tc); }
+.dossier.ship { border-top-color: var(--tc); }
+.dossier.ship .kind { color: var(--tc); }
+.dossier .links-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.banner.ship { border-color: #ff5c5c; background: rgba(34, 14, 14, .9); text-transform: none; letter-spacing: .04em; animation-iteration-count: 2; }
 .tbl.sig td:first-child { line-height: 1.45; }
 .tbl.sig a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--muted); }
 .tbl.sig a:hover { color: #fff; border-bottom-color: var(--fg); }
@@ -541,7 +545,7 @@ button { font-family: inherit; }
   <div class="topbar">
     <div class="brand"><b>◢</b> Watchfloor<small>LIVE</small></div>
     <div class="apps" role="group" aria-label="앱 전환"><button type="button" data-app="map" aria-pressed="true">지도<kbd>M</kbd></button><button type="button" data-app="flat" aria-pressed="false">평면<kbd>D</kbd></button><button type="button" data-app="graph" aria-pressed="false">그래프<kbd>G</kbd></button><button type="button" data-app="table" aria-pressed="false">표<kbd>T</kbd></button></div>
-    <div class="screens" role="group" aria-label="유형별 전용 화면"><button type="button" data-screen="quake" aria-pressed="false">지진<kbd>⇧1</kbd></button><button type="button" data-screen="disaster" aria-pressed="false">재난·태풍<kbd>⇧2</kbd></button><button type="button" data-screen="air" aria-pressed="false">항공<kbd>⇧3</kbd></button><button type="button" data-screen="news" aria-pressed="false">뉴스·분쟁<kbd>⇧4</kbd></button></div>
+    <div class="screens" role="group" aria-label="유형별 전용 화면"><button type="button" data-screen="quake" aria-pressed="false">지진<kbd>⇧1</kbd></button><button type="button" data-screen="disaster" aria-pressed="false">재난·태풍<kbd>⇧2</kbd></button><button type="button" data-screen="air" aria-pressed="false">항공<kbd>⇧3</kbd></button><button type="button" data-screen="news" aria-pressed="false">뉴스·분쟁<kbd>⇧4</kbd></button><button type="button" data-screen="sea" aria-pressed="false">해상<kbd>⇧5</kbd></button></div>
     <div class="clock"><span class="utc">UTC <b id="utc">--:--:--</b></span><span>KST <b id="kst">--:--:--</b></span></div>
     <div class="idx" title="최근 48시간 지진 규모로 계산한 자체 활동 지수예요"><span>활동 지수</span><span class="bar"><i id="idxBar"></i></span><b id="idxVal">0</b><span class="lv" id="idxLv">안정</span></div>
     <div class="search" role="search"><input id="q" type="search" placeholder="장소, 사건, 기사 검색" aria-label="장소나 사건 검색" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sr"><kbd>/</kbd><div class="sr" id="sr" role="listbox" hidden></div></div>
@@ -551,6 +555,7 @@ button { font-family: inherit; }
     <details class="tools"><summary class="btn">도구 ▾</summary><div class="tools-m">
       <button class="btn warn" id="eewTest" type="button">속보 테스트<kbd>E</kbd></button>
       <button class="btn warn" id="jalert" type="button">J-Alert 데모<kbd>J</kbd></button>
+      <button class="btn warn" id="darkTest" type="button">선박 신호 끊김 테스트</button>
       <button class="btn" id="sound" aria-pressed="false" type="button">소리 켜기</button>
     </div></details>
   </div>
@@ -720,13 +725,13 @@ const world = new Globe(el)
   .polygonsTransitionDuration(0)
   .pointLat('lat').pointLng('lng')
   .pointAltitude(d => d.mk === 'ev' ? (d.ev.type === 'quake' ? 0.012 + d.ev.severity * 0.022 : 0.008 + d.ev.severity * 0.01) : d.type === 'ship' ? 0.003 : d.type === 'ac' ? 0.006 + Math.min(d.alt, 45000) / 45000 * 0.03 : (d.mag - 4) / 25)
-  .pointRadius(d => d.mk === 'ev' ? (S.sel.has(d.ev.id) ? 0.12 : 0) + 0.13 + d.ev.severity * 0.07 + Math.min(0.2, Math.log2(d.ev.signals.length) * 0.05) : d.type === 'ship' ? 0.06 : d.type === 'ac' ? 0.07 : 0.18 + Math.max(0, d.mag - 4.5) * 0.12)
-  .pointColor(d => d.mk === 'ev' ? (S.sel.size && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.18) : d.ev.status === 'closed' && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.45) : tcol(d.ev.type)) : d.type === 'ship' ? 'rgba(94,224,176,0.85)' : d.type === 'ac' ? (d.ground ? 'rgba(160,170,180,0.6)' : '#f4f8ff') : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[sev(d)])
+  .pointRadius(d => d.mk === 'ev' ? (S.sel.has(d.ev.id) ? 0.12 : 0) + 0.13 + d.ev.severity * 0.07 + Math.min(0.2, Math.log2(d.ev.signals.length) * 0.05) : d.type === 'ship' ? (d.dark ? 0.16 : d.back ? 0.1 : 0.06) : d.type === 'ac' ? 0.07 : 0.18 + Math.max(0, d.mag - 4.5) * 0.12)
+  .pointColor(d => d.mk === 'ev' ? (S.sel.size && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.18) : d.ev.status === 'closed' && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.45) : tcol(d.ev.type)) : d.type === 'ship' ? (d.dark ? '#ff5c5c' : d.back ? '#f0b43c' : 'rgba(94,224,176,0.85)') : d.type === 'ac' ? (d.ground ? 'rgba(160,170,180,0.6)' : '#f4f8ff') : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[sev(d)])
   .pointLabel(d => d.mk === 'ev' ? tip(`<b style="color:${tcol(d.ev.type)}">${esc(TYPE[d.ev.type]?.ko || '')}</b> · ${pips(d.ev.severity)} · 출처 ${d.ev.sources.length}<br>${esc(d.ev.title)}<br><span style="color:#7a8ea3">${esc(d.ev.place)} · ${ago(d.ev.updated)}</span>`, rgba(tcol(d.ev.type), .5))
-    : d.type === 'ship' ? tip(`선박 · ${esc(d.name || 'MMSI ' + d.mmsi)}<br>${d.sog != null ? d.sog + ' kn' : ''}${d.dest ? ' · ' + esc(d.dest) : ''}`)
+    : d.type === 'ship' ? tip(`${d.dark ? '<b style="color:#ff5c5c">신호 끊김</b> · ' : d.back ? '<b style="color:#f0b43c">다시 잡힘</b> · ' : ''}선박 · ${esc(d.name || 'MMSI ' + d.mmsi)}<br>${d.sog != null ? d.sog + ' kn' : ''}${d.dest ? ' · ' + esc(d.dest) : ''}${d.dark ? ' · ' + silentMin(d) + '분째' : ''}`)
     : d.type === 'ac' ? tip(`${esc(d.flight)} ${esc(d.type2 || '')}<br>${d.ground ? '지상' : Math.round(d.alt).toLocaleString() + ' ft'}${d.gs ? ' · ' + Math.round(d.gs) + ' kt' : ''}`)
     : tip(`M${d.mag.toFixed(1)} · ${esc(d.place)}`))
-  .onPointClick(d => { if (d.mk === 'ev') { cinemaQueue = []; openEvent(d.ev, true); } else if (d.type !== 'ac' && d.type !== 'ship') focusOn(d, true); })
+  .onPointClick(d => { if (d.mk === 'ev') { cinemaQueue = []; openEvent(d.ev, true); } else if (d.type === 'ship') shipFocus(d); else if (d.type !== 'ac') focusOn(d, true); })
   .labelLat('lat').labelLng('lng')
   .labelText(d => d.kind === 'obj' ? (/^[\x20-\x7E]*$/.test(d.label) ? d.label : '') : d.kind === 'choke' ? d.en : d.kind === 'sat' && /^(ISS|CSS|TIANHE)/.test(d.name) ? d.name.split(' ')[0] : '')
   .labelSize(d => d.kind === 'sat' ? 0.5 : d.kind === 'obj' ? 0.6 : 0.55).labelDotRadius(d => d.kind === 'obj' ? 0.45 : d.kind === 'plant' ? 0.28 : d.kind === 'sat' ? 0.2 : 0.4).labelAltitude(d => d.kind === 'sat' ? Math.min(d.alt, 2500) / 6371 : 0.006).labelResolution(2).labelsTransitionDuration(0)
@@ -1758,8 +1763,11 @@ let shipPts = [], shipTimer = null;
 async function loadShips() {
   try {
     const j = await (await fetch('api/ships')).json();
-    shipPts = (j.ships || []).map(s => ({ ...s, type: 'ship' }));
+    const demo = shipPts.filter(s => s.demo);
+    shipPts = [...demo, ...(j.ships || []).map(s => ({ ...s, type: 'ship' }))];
+    shipBoxes = j.boxes || shipBoxes;
     applyLayers();
+    if (S.screen === 'sea') renderScreen();
   } catch {}
 }
 function setShips(on) {
@@ -2193,7 +2201,8 @@ const SCREENS = {
   quake: { title: '지진 감시', types: ['quake'], color: '#f0b43c' },
   disaster: { title: '재난 · 태풍 감시', types: ['disaster'], color: '#ff9f43' },
   air: { title: '항공 감시', types: null, color: '#f4f8ff' },
-  news: { title: '뉴스 · 분쟁 감시', types: ['conflict', 'news', 'accident'], color: '#b48cff' }
+  news: { title: '뉴스 · 분쟁 감시', types: ['conflict', 'news', 'accident'], color: '#b48cff' },
+  sea: { title: '해상 감시', types: null, color: '#5ee0b0' }
 };
 S.screen = null;
 let airTimer = null, airData = null, airCentre = null, stormPaths = [];
@@ -2207,6 +2216,7 @@ function setScreen(name) {
   if (sc && sc.types) sc.types.forEach(t => S.filters.type.add(t));
   clearInterval(airTimer); airTimer = null;
   if (name === 'air') { if (!layers.aircraft) toggleLayer('aircraft'); loadAirArea(); airTimer = setInterval(loadAirArea, 20000); }
+  if (name === 'sea' && !layers.ships) toggleLayer('ships');
   else if (airData) { airData = null; acPoints = []; }
   stormPaths = [];
   if (S.app !== 'map') setApp('map');
@@ -2222,11 +2232,12 @@ function renderScreen() {
   if (!S.screen) { box.hidden = true; restorePaths(); return; }
   const sc = SCREENS[S.screen];
   box.style.setProperty('--tc', sc.color);
-  const body = S.screen === 'quake' ? quakeScreen() : S.screen === 'disaster' ? disasterScreen() : S.screen === 'air' ? airScreen() : newsScreen();
+  const body = S.screen === 'quake' ? quakeScreen() : S.screen === 'disaster' ? disasterScreen() : S.screen === 'air' ? airScreen() : S.screen === 'sea' ? seaScreen() : newsScreen();
   box.innerHTML = `<div class="tp-h"><span class="tp-t">${sc.title}</span><button type="button" class="close" aria-label="전용 화면 닫기">×</button></div>${body}`;
   box.querySelector('.close').addEventListener('click', () => setScreen(null));
   box.querySelectorAll('[data-ev]').forEach(n => n.addEventListener('click', () => { const ev = EV.get(n.dataset.ev); if (ev) openEvent(ev, true); }));
   box.querySelectorAll('[data-ac]').forEach(n => n.addEventListener('click', () => { const a = acPoints[+n.dataset.ac]; if (a) world.pointOfView({ lat: a.lat, lng: a.lng, altitude: 0.35 }, T(1200)); }));
+  box.querySelectorAll('[data-ship]').forEach(n => n.addEventListener('click', () => { const sh = shipPts.find(x => String(x.mmsi) === n.dataset.ship); if (sh) shipFocus(sh); }));
   $('airReload')?.addEventListener('click', () => loadAirArea(true));
   if (S.screen !== 'disaster') restorePaths();
 }
@@ -3229,6 +3240,128 @@ function setupFlat() {
 }
 setupFlat();
 
+// ================= SEA WATCH (dark ships) =================
+// A ship that was under way and stopped sending AIS inside a watch box is "dark".
+// From its last speed and course we draw where it could be now: a ±30° fan whose
+// radius grows with the time it has been silent (capped at 12 hours).
+const SHIP_TYPE = t => t == null ? '' : t === 30 ? '어선' : t === 35 ? '군함' : t === 36 || t === 37 ? '요트·레저' : t >= 60 && t < 70 ? '여객선' : t >= 70 && t < 80 ? '화물선' : t >= 80 && t < 90 ? '유조선' : t === 52 || t === 31 || t === 32 ? '예인선' : t === 55 ? '법 집행' : '기타';
+let shipBoxes = [];
+const silentMin = s => Math.max(0, Math.round((Date.now() - s.t) / 60000));
+function shipReach(s) {
+  const min = Math.min(silentMin(s), 720);
+  return { min, km: Math.round((s.sog || 0) * 1.852 * min / 60) };
+}
+function deadReckon(lat, lng, sog, cog, min) {
+  const d = sog * 1.852 * min / 60 / 6371, br = cog * Math.PI / 180, la = lat * Math.PI / 180, lo = lng * Math.PI / 180;
+  const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(br));
+  const lo2 = lo + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+  return [la2 * 180 / Math.PI, ((lo2 * 180 / Math.PI + 540) % 360) - 180];
+}
+// outline of the possible area plus the straight-ahead line
+function shipFan(s) {
+  const { min } = shipReach(s);
+  if (!(s.sog > 0) || !isFinite(s.cog) || min < 1) return [];
+  const arc = [];
+  for (let a = -30; a <= 30; a += 5) arc.push(deadReckon(s.lat, s.lng, s.sog, (s.cog + a + 360) % 360, min));
+  const ring = [[s.lat, s.lng], ...arc, [s.lat, s.lng]].map(p => [p[0], p[1], 0.004]);
+  const ahead = [[s.lat, s.lng, 0.005], [...deadReckon(s.lat, s.lng, s.sog, s.cog, min), 0.005]];
+  return [{ pts: ring, c: 'rgba(255,92,92,0.85)', w: 0.4 }, { pts: ahead, c: 'rgba(255,92,92,0.9)', w: 0.3, dash: true }];
+}
+function shipPaths(s) {
+  const out = [];
+  if (s.trk && s.trk.length > 1) out.push({ pts: s.trk.map(p => [p[0], p[1], 0.004]), c: 'rgba(94,224,176,0.9)', w: 0.35 });
+  if (s.dark) out.push(...shipFan(s));
+  if (s.back && isFinite(s.back.fromLat)) out.push({ pts: [[s.back.fromLat, s.back.fromLng, 0.005], [s.lat, s.lng, 0.005]], c: 'rgba(240,180,60,0.95)', w: 0.35, dash: true });
+  return out;
+}
+function shipFocus(s) {
+  clearTimeout(resumeTimer); clearFx();
+  busy = true; ctl.autoRotate = false; currentId = 'ship-' + s.mmsi;
+  currentFocus = { type: 'ship', place: s.name || 'MMSI ' + s.mmsi, lat: s.lat, lng: s.lng };
+  const r = shipReach(s);
+  flyTo(s, s.dark ? Math.min(1.2, 0.25 + r.km / 400) : 0.35);
+  if (s.dark) showBanner(`● 선박 신호 끊김 · ${s.name || 'MMSI ' + s.mmsi} · ${r.min}분째`, 'ship');
+  setTimeout(() => {
+    if (currentId !== 'ship-' + s.mmsi) return;
+    world.pathsData(shipPaths(s));
+    world.ringsData([{ lat: s.lat, lng: s.lng, max: 2.5, color: rgba(s.dark ? '#ff5c5c' : '#5ee0b0', 'A') }]);
+  }, T(1150));
+  dossierTimer = setTimeout(() => showShipCard(s), T(1600));
+  resumeTimer = setTimeout(resume, T(90000));
+}
+function showShipCard(s) {
+  const d = document.createElement('section');
+  d.className = 'dossier ship'; d.setAttribute('aria-live', 'polite');
+  d.style.setProperty('--tc', s.dark ? '#ff5c5c' : '#5ee0b0');
+  const r = shipReach(s);
+  const rows = [
+    ['MMSI', String(s.mmsi)],
+    ['종류', SHIP_TYPE(s.shipType) || '알 수 없음'],
+    ['목적지', s.dest || '-'],
+    ['마지막 속도·침로', `${s.sog != null ? s.sog.toFixed(1) + ' kn' : '-'} · ${isFinite(s.cog) && s.cog < 360 ? Math.round(s.cog) + '°' : '-'}`],
+    ['마지막 신호', `${fmt(s.t, 'Asia/Seoul')} KST (${ago(s.t)})`],
+    ...(s.boxName ? [['감시 구역', s.boxName]] : []),
+    ...(s.dark ? [['갈 수 있는 거리', `최대 약 ${r.km}km (${r.min}분 × 마지막 속도)`]] : []),
+    ...(s.back ? [['신호 공백', `${s.back.gapMin}분 끊겼다가 ${ago(s.back.at)} 다시 잡힘 · 그사이 ${Math.round(distKm(s.back.fromLat, s.back.fromLng, s.lat, s.lng))}km 이동`]] : [])
+  ];
+  const lead = s.dark
+    ? '움직이던 배가 AIS 신호를 보내지 않고 있어요. 같은 구역의 다른 배들은 계속 잡히고 있어서 수신 문제는 아닌 것으로 봐요. 빨간 부채꼴은 마지막 속도와 침로로 지금까지 갈 수 있는 범위예요(침로 ±30°).'
+    : s.back ? '신호가 끊겼다가 다시 잡힌 배예요. 주황 점선이 끊겼던 위치에서 다시 잡힌 위치까지예요.' : '';
+  d.innerHTML = `<button class="close" type="button" aria-label="닫기">×</button><div class="kind">선박 · ${s.dark ? '신호 끊김' : s.back ? '다시 잡힘' : '항해 중'}</div><h3>${esc(s.name || 'MMSI ' + s.mmsi)}</h3><dl></dl>${lead ? `<p class="lead">${lead}</p>` : ''}<div class="links-row"><a class="open" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(s.mmsi)}" target="_blank" rel="noopener noreferrer">MarineTraffic ↗</a> <a class="open" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(s.mmsi)}" target="_blank" rel="noopener noreferrer">VesselFinder ↗</a></div>${s.demo ? '<p class="note">테스트용 가짜 선박이에요.</p>' : ''}`;
+  const dl = d.querySelector('dl');
+  rows.forEach(([k, v]) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); });
+  d.querySelector('.close').addEventListener('click', () => { clearTimeout(resumeTimer); resume(); });
+  $('app').append(d);
+  dossierEl = d;
+}
+function onShipEvent(s) {
+  const i = shipPts.findIndex(x => x.mmsi === s.mmsi);
+  const prev = i >= 0 ? shipPts[i] : {};
+  const next = { ...prev, ...s, trk: s.trk || prev.trk, type: 'ship' };
+  if (i >= 0) shipPts[i] = next; else shipPts.unshift(next);
+  if (layers.ships) applyLayers();
+  if (S.screen === 'sea') renderScreen();
+  if (s.dark && !prev.dark) shipToast(next);
+}
+function shipToast(s) {
+  beep('hit');
+  const n = document.createElement('button');
+  n.type = 'button'; n.className = 'al-toast';
+  n.innerHTML = `<span class="fx-t">선박 신호 끊김${s.boxName ? ' · ' + esc(s.boxName) : ''}</span><b>${esc(s.name || 'MMSI ' + s.mmsi)}</b><span class="st">${SHIP_TYPE(s.shipType) || '선박'} · 마지막 ${s.sog != null ? s.sog.toFixed(1) + ' kn' : ''} · ${ago(s.t)}</span>`;
+  n.addEventListener('click', () => { n.remove(); shipFocus(s); });
+  $('alToasts').append(n);
+  setTimeout(() => n.remove(), 20000);
+  logAct('선박 신호 끊김', s.name || String(s.mmsi));
+}
+// fake dark ship for trying the feature without an AIS key
+function testDarkShip() {
+  const now = Date.now(), cog = 205, sog = 13.5;
+  const trk = []; for (let m = 90; m >= 25; m -= 5) { const [la, lo] = deadReckon(34.9, 129.6, sog, cog, 90 - m); trk.push([la, lo, now - m * 60000]); }
+  const last = trk[trk.length - 1];
+  const s = { mmsi: 999000001, name: 'TEST VESSEL', shipType: 70, dest: 'SHANGHAI', lat: last[0], lng: last[1], sog, cog, t: last[2], trk, dark: true, darkAt: now, boxName: '한·일 근해', demo: true };
+  if (!layers.ships) toggleLayer('ships');
+  onShipEvent(s);
+  shipFocus(s);
+}
+// ---- 해상 감시 screen ----
+function seaScreen() {
+  if (S.ships === 'off') return `<p class="note">선박 데이터가 꺼져 있어요. 서버에 <code>AISSTREAM_API_KEY</code>(aisstream.io 무료 키)를 넣으면 켜져요. 키 없이 보려면 도구 메뉴의 <b>선박 신호 끊김 테스트</b>를 눌러 보세요.</p>${seaDarkList()}`;
+  const dark = shipPts.filter(s => s.dark), back = shipPts.filter(s => s.back && !s.dark);
+  const live = shipPts.filter(s => !s.dark && Date.now() - s.t < 30 * 60000);
+  const types = {}; live.forEach(s => { const k = SHIP_TYPE(s.shipType) || '미상'; types[k] = (types[k] || 0) + 1; });
+  const boxes = shipBoxes.map(b => [b.name, live.filter(s => s.lat >= b.box[0][0] && s.lat <= b.box[1][0] && s.lng >= b.box[0][1] && s.lng <= b.box[1][1]).length]);
+  return kpi([[live.length, '수신 중'], [dark.length, '신호 끊김', dark.length ? 'var(--crit)' : ''], [back.length, '다시 잡힘'], [shipBoxes.length || '-', '감시 구역']]) +
+    seaDarkList() +
+    (back.length ? `<div class="sec"><div class="sec-h"><span>끊겼다가 다시 잡힌 배</span><b>${back.length}</b></div><table class="tbl"><tbody>${back.slice(0, 8).map(s => `<tr class="go" data-ship="${s.mmsi}"><td>${esc(s.name || s.mmsi)} <span class="st">${SHIP_TYPE(s.shipType)}</span></td><td class="st">${s.back.gapMin}분 공백</td><td class="st">${ago(s.back.at)}</td></tr>`).join('')}</tbody></table></div>` : '') +
+    (boxes.length ? `<div class="sec"><div class="sec-h"><span>구역별 수신 선박</span></div>${bars(boxes, '#5ee0b0')}</div>` : '') +
+    `<div class="sec"><div class="sec-h"><span>종류</span></div>${bars(Object.entries(types).sort((a, b) => b[1] - a[1]).slice(0, 6), '#5ee0b0')}</div>` +
+    `<p class="note">움직이던 배(3노트 이상)가 20분 넘게 신호를 안 보내고, 같은 구역의 다른 배는 잡히고, 침로대로라면 아직 구역 안에 있어야 할 때 "신호 끊김"으로 표시해요. 수신기가 없는 바다로 나갔거나 장비 문제일 수도 있어요.</p>`;
+}
+function seaDarkList() {
+  const dark = shipPts.filter(s => s.dark).sort((a, b) => b.t - a.t);
+  return `<div class="sec"><div class="sec-h" style="color:var(--crit)"><span>신호 끊긴 배</span><b>${dark.length}</b></div><table class="tbl"><tbody>${dark.slice(0, 12).map(s => `<tr class="go" data-ship="${s.mmsi}"><td>${esc(s.name || s.mmsi)} <span class="st">${SHIP_TYPE(s.shipType)}${s.boxName ? ' · ' + esc(s.boxName) : ''}</span></td><td class="st hit">${silentMin(s)}분째</td><td class="st">~${shipReach(s).km}km</td></tr>`).join('') || '<tr><td class="none">지금 신호가 끊긴 배는 없어요</td></tr>'}</tbody></table></div>`;
+}
+
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
 function addQuake(q, live) {
@@ -3259,6 +3392,7 @@ function connectStream() {
     extra.push(a); updateStats();
     if (!viewRange) { cinemaQueue = []; setTimeout(() => focusOn(a), 300); } // early warnings always interrupt
   });
+  es.addEventListener('ship', m => onShipEvent(JSON.parse(m.data)));
   es.addEventListener('tsunami', m => { extra.push({ ...JSON.parse(m.data), type: 'tsunami' }); });
   es.addEventListener('event', m => {
     const raw = JSON.parse(m.data);
@@ -3321,6 +3455,7 @@ function testEEW() {
   renderFeed(); focusOn(a, false, ev);
 }
 $('eewTest').addEventListener('click', testEEW);
+$('darkTest').addEventListener('click', () => { document.querySelector('details.tools')?.removeAttribute('open'); testDarkShip(); });
 function fireMissile() {
   const e = { id: 'm' + Date.now(), type: 'missile', mag: 9, time: Date.now(), title: '북한 탄도미사일 발사 추정 (데모)', lat: 39.66, lng: 124.70, impact: { lat: 40.9, lng: 136.2 } };
   extra.push(e);
@@ -3342,7 +3477,7 @@ addEventListener('keydown', k => {
   else if (k.key === 'Escape' && busy) { clearTimeout(resumeTimer); resume(); }
   else if (k.key === 'Escape' && S.app !== 'map') setApp('map');
   else if (k.key === 'Escape' && S.screen) setScreen(null);
-  else if (k.shiftKey && /^Digit[1-4]$/.test(k.code)) setScreen(['quake', 'disaster', 'air', 'news'][+k.code.slice(5) - 1]);
+  else if (k.shiftKey && /^Digit[1-5]$/.test(k.code)) setScreen(['quake', 'disaster', 'air', 'news', 'sea'][+k.code.slice(5) - 1]);
   else if (k.key === 'm' || k.key === 'M') setApp('map');
   else if (k.key === 'g' || k.key === 'G') setApp('graph');
   else if (k.key === 't' || k.key === 'T') setApp('table');

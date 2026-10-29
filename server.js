@@ -408,7 +408,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events') return send(res, 200, { events: events.list() });
     if (p.startsWith('/api/events/')) { const ev = events.get(decodeURIComponent(p.slice(12))); return ev ? send(res, 200, ev) : send(res, 404, { error: '사건을 찾지 못했어요' }); }
     if (p === '/api/sats') return send(res, 200, { sats: intel.sats() });
-    if (p === '/api/ships') return send(res, 200, { ships: intel.ships(), on: !!AIS_KEY });
+    if (p === '/api/ships') return send(res, 200, { ships: intel.ships(), boxes: intel.boxes(), on: !!AIS_KEY });
     if (p === '/api/hazards') return send(res, 200, { hazards: intel.hazards() });
     if (p === '/api/places') return send(res, 200, { places: PLACES });
     if (p === '/api/news') return send(res, 200, { news: news.list(), feeds: news.feeds() });
