@@ -68,9 +68,38 @@ const AIS_BOXES = [
   [[8, -80.5], [9.6, -79]]       // Panama
 ];
 
+const AIS_BOX_NAMES = ['한·일 근해', '대만 해협', '말라카 해협', '호르무즈 해협', '바브엘만데브', '수에즈', '지브롤터', '도버 해협', '파나마'];
+const inBox = (b, lat, lng, pad = 0) => lat >= b[0][0] + pad && lat <= b[1][0] - pad && lng >= b[0][1] + pad && lng <= b[1][1] - pad;
+export const boxOf = (lat, lng) => AIS_BOXES.findIndex(b => inBox(b, lat, lng));
+// Position after `min` minutes at speed `sog` (knots) on course `cog` (degrees).
+export function deadReckon(lat, lng, sog, cog, min) {
+  const d = sog * 1.852 * min / 60 / 6371, br = cog * Math.PI / 180, la = lat * Math.PI / 180, lo = lng * Math.PI / 180;
+  const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(br));
+  const lo2 = lo + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+  return [la2 * 180 / Math.PI, ((lo2 * 180 / Math.PI + 540) % 360) - 180];
+}
+// "Dark" ship: it was under way, stopped reporting, the rest of its watch box is still
+// reporting (so the feed is fine), and its course would not have taken it out of the box.
+export const DARK_AFTER = 20 * 60000;
+export function darkCheck(ships, boxLast, now = Date.now()) {
+  const changed = [];
+  for (const s of ships.values()) {
+    if (s.dark || !isFinite(s.lat) || !(s.sog >= 3) || s.sog > 60 || !isFinite(s.cog) || s.cog >= 360) continue;
+    if (now - s.t < DARK_AFTER) continue;
+    const b = boxOf(s.lat, s.lng);
+    if (b < 0 || !(now - (boxLast[b] || 0) < 5 * 60000)) continue;
+    const [la, lo] = deadReckon(s.lat, s.lng, s.sog, s.cog, (now - s.t) / 60000);
+    if (!inBox(AIS_BOXES[b], la, lo, 0.05)) continue;   // probably just sailed out of coverage
+    s.dark = true; s.darkAt = now; s.box = b; s.boxName = AIS_BOX_NAMES[b];
+    changed.push(s);
+  }
+  return changed;
+}
+
 export function createIntel({ broadcast, status, log, UA, aisKey, onHazard = () => {} }) {
   let sats = [], hazards = [];
   const ships = new Map();
+  const boxLast = AIS_BOXES.map(() => 0);   // last report time in each watch box
   const hazardSeen = new Set();
   let hazardFirst = true;
 
@@ -131,7 +160,19 @@ export function createIntel({ broadcast, status, log, UA, aisKey, onHazard = () 
         const prev = ships.get(md.MMSI) || {};
         if (j.MessageType === 'PositionReport') {
           const pr = j.Message.PositionReport;
-          ships.set(md.MMSI, { ...prev, mmsi: md.MMSI, name: (md.ShipName || prev.name || '').trim(), lat: md.latitude, lng: md.longitude, sog: pr.Sog, cog: pr.Cog, t: Date.now() });
+          const now = Date.now(), lat = md.latitude, lng = md.longitude;
+          const b = boxOf(lat, lng); if (b >= 0) boxLast[b] = now;
+          const trk = (prev.trk || []).slice(-29);
+          const last = trk[trk.length - 1];
+          if (!last || now - last[2] > 120000 || Math.abs(last[0] - lat) + Math.abs(last[1] - lng) > 0.01) trk.push([+lat.toFixed(4), +lng.toFixed(4), now]);
+          const next = { ...prev, mmsi: md.MMSI, name: (md.ShipName || prev.name || '').trim(), lat, lng, sog: pr.Sog, cog: pr.Cog, hdg: pr.TrueHeading, t: now, trk };
+          if (prev.dark) {
+            // it came back: remember the gap and how far it moved while silent
+            next.dark = false; next.back = { at: now, gapMin: Math.round((now - prev.t) / 60000), fromLat: prev.lat, fromLng: prev.lng };
+            log(`ship back: ${next.name || md.MMSI} after ${next.back.gapMin} min`);
+            broadcast('ship', { ...next, trk: undefined });
+          }
+          ships.set(md.MMSI, next);
         } else if (j.MessageType === 'ShipStaticData') {
           const sd = j.Message.ShipStaticData;
           ships.set(md.MMSI, { ...prev, mmsi: md.MMSI, name: (sd.Name || md.ShipName || '').trim(), shipType: sd.Type, dest: (sd.Destination || '').trim(), lat: prev.lat ?? md.latitude, lng: prev.lng ?? md.longitude, t: prev.t || Date.now() });
@@ -148,21 +189,33 @@ export function createIntel({ broadcast, status, log, UA, aisKey, onHazard = () 
     };
   }
   function pruneShips(maxAge = 30 * 60000) {
-    const cut = Date.now() - maxAge;
-    for (const [k, s] of ships) if (s.t < cut || !isFinite(s.lat)) ships.delete(k);
+    const now = Date.now(), cut = now - maxAge;
+    // dark ships and ships that just came back are kept for 12 hours
+    for (const s of ships.values()) if (s.back && now - s.back.at > 12 * 3600e3) delete s.back;
+    for (const [k, s] of ships) if (!isFinite(s.lat) || (s.t < cut && !(s.dark && now - s.t < 12 * 3600e3))) ships.delete(k);
+  }
+  function checkDark() {
+    for (const s of darkCheck(ships, boxLast)) {
+      log(`ship dark: ${s.name || s.mmsi} (${s.boxName}) silent ${Math.round((Date.now() - s.t) / 60000)} min`);
+      broadcast('ship', { ...s, trk: undefined });
+    }
   }
 
   function start() {
     status.sats = 'wait'; status.hazards = 'wait'; status.ships = aisKey ? 'wait' : 'off';
     pollSats(); setInterval(pollSats, 6 * 3600e3);
     pollHazards(); setInterval(pollHazards, 30 * 60000);
-    connectAIS(); setInterval(() => pruneShips(), 5 * 60000);
+    connectAIS(); setInterval(() => pruneShips(), 5 * 60000); if (aisKey) setInterval(checkDark, 60000);
   }
 
   return {
     start,
     sats: () => sats,
     hazards: () => hazards,
-    ships: () => [...ships.values()].filter(s => isFinite(s.lat) && isFinite(s.lng)).slice(0, 4000)
+    // dark and returned ships first so they survive the cap; tracks only for those
+    ships: () => [...ships.values()].filter(s => isFinite(s.lat) && isFinite(s.lng))
+      .sort((a, b) => (b.dark || b.back ? 1 : 0) - (a.dark || a.back ? 1 : 0)).slice(0, 4000)
+      .map(s => s.dark || s.back ? s : { ...s, trk: undefined }),
+    boxes: () => AIS_BOXES.map((b, i) => ({ name: AIS_BOX_NAMES[i], box: b, last: boxLast[i] }))
   };
 }
