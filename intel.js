@@ -3,6 +3,7 @@
 // ---------- satellites ----------
 const SAT_GROUPS = [
   { group: 'stations', url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle' },
+  { group: 'resource', url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle' },   // Earth observation (Landsat, Sentinel …)
   { group: 'visual', url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle' }
 ];
 
@@ -121,7 +122,7 @@ export function createIntel({ broadcast, status, log, UA, aisKey, onHazard = () 
     }
     if (all.length) {
       const seen = new Set();
-      sats = all.filter(s => !seen.has(s.id) && seen.add(s.id)).slice(0, 260);
+      sats = all.filter(s => !seen.has(s.id) && seen.add(s.id)).slice(0, 480);
       status.sats = 'ok';
       log(`satellites: ${sats.length}`);
     } else if (!sats.length) status.sats = 'error';
