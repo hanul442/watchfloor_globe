@@ -265,6 +265,8 @@ button { font-family: inherit; }
 .dossier.ship { border-top-color: var(--tc); }
 .dossier.ship .kind { color: var(--tc); }
 .dossier .links-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.img-date { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 14px; border-top: 1px solid var(--line); font: 11px var(--f-body); color: var(--muted); }
+.img-date input { font: 12px var(--f-mono); color: var(--fg); background: rgba(20,32,48,.8); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; color-scheme: dark; }
 .banner.ship { border-color: #ff5c5c; background: rgba(34, 14, 14, .9); text-transform: none; letter-spacing: .04em; animation-iteration-count: 2; }
 .tbl.sig td:first-child { line-height: 1.45; }
 .tbl.sig a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--muted); }
@@ -585,6 +587,7 @@ button { font-family: inherit; }
       </div>
     </div>
     <div class="layers" id="layers"><span class="lbl">레이어</span></div>
+    <div class="img-date" id="imgDateWrap" hidden><label for="imgDate">위성 사진 날짜</label><input type="date" id="imgDate"><span class="st">NASA MODIS · 구름·빈 줄이 있을 수 있어요</span></div>
     <div class="srcs" id="srcs"><span data-k="usgs">USGS</span><span data-k="jma">JMA</span><span data-k="news">뉴스</span><span data-k="hazards">NASA 재해</span><span data-k="aircraft">항공</span><span data-k="sats">위성</span><span data-k="ships">선박</span><span data-k="webcams">웹캠</span><span data-k="ai">AI</span></div>
     <div class="keys"><kbd>Space</kbd> 자동 이동 · <kbd>N</kbd> 다음 사건 · <kbd>/</kbd> 검색 · <kbd>M</kbd><kbd>G</kbd><kbd>T</kbd> 지도·그래프·표 · <kbd>E</kbd> 속보 테스트 · <kbd>J</kbd> 미사일 데모 · <kbd>1</kbd>–<kbd>9</kbd> 레이어 · <kbd>Esc</kbd> 닫기</div>
   </aside>
@@ -709,7 +712,7 @@ setInterval(tickClock, 1000); tickClock();
 const el = $('globe');
 let events = [];            // quakes, ascending by time
 const extra = [];           // missile / eew / tsunami items shown in feed
-const layers = { quake: true, conflict: true, disaster: true, accident: true, news: true, plant: true, choke: true, route: false, aircraft: true, sats: false, ships: true, night: false };
+const layers = { quake: true, conflict: true, disaster: true, accident: true, news: true, plant: true, choke: true, route: false, aircraft: true, sats: false, ships: true, night: false, imagery: false };
 let countries = [], nightCells = [], missileArcs = [], acPoints = [];
 
 const tip = (html, b) => `<div style="font:12px 'IBM Plex Sans KR',sans-serif;background:rgba(9,15,24,.92);border:1px solid ${b || '#1c2a3b'};padding:5px 8px;border-radius:4px;color:#d6e2ee;max-width:320px;white-space:normal;line-height:1.45">${html}</div>`;
@@ -802,9 +805,9 @@ function applyLayers() {
 }
 buildNight();
 setInterval(() => { buildNight(); if (layers.night) applyLayers(); }, 300000);
-fetch('countries.geojson').then(r => r.json()).then(g => { countries = g.features; world.hexPolygonsData(g.features); countryCache.clear(); countryCentres = null; applyLayers(); emit(); }).catch(() => {});
+fetch('countries.geojson').then(r => r.json()).then(g => { countries = g.features; world.hexPolygonsData(IMG.on ? [] : g.features); countryCache.clear(); countryCentres = null; applyLayers(); emit(); }).catch(() => {});
 
-const LAYER_DEFS = [['quake', '지진', '#f0b43c'], ['conflict', '분쟁', '#ff5c5c'], ['disaster', '재난', '#ff9f43'], ['accident', '사고', '#ffd166'], ['news', '주요 뉴스', '#b48cff'], ['plant', '원전', '#c6f05a'], ['choke', '해상 요충지', '#46d6e8'], ['aircraft', '항공기', '#f4f8ff'], ['sats', '위성', '#e6f0ff'], ['ships', '선박', '#5ee0b0'], ['route', '주요 항로', '#96d7ff'], ['night', '낮/밤', '#5b6b7c']];
+const LAYER_DEFS = [['quake', '지진', '#f0b43c'], ['conflict', '분쟁', '#ff5c5c'], ['disaster', '재난', '#ff9f43'], ['accident', '사고', '#ffd166'], ['news', '주요 뉴스', '#b48cff'], ['plant', '원전', '#c6f05a'], ['choke', '해상 요충지', '#46d6e8'], ['aircraft', '항공기', '#f4f8ff'], ['sats', '위성', '#e6f0ff'], ['ships', '선박', '#5ee0b0'], ['route', '주요 항로', '#96d7ff'], ['night', '낮/밤', '#5b6b7c'], ['imagery', '위성 사진', '#7fb2e5']];
 LAYER_DEFS.forEach(([k, label, c], i) => {
   const b = document.createElement('button');
   b.className = 'chip'; b.type = 'button'; b.style.setProperty('--c', c);
@@ -819,6 +822,7 @@ function toggleLayer(k) {
   document.querySelector(`.chip[data-k="${k}"]`).setAttribute('aria-pressed', layers[k]);
   if (k === 'sats') setSats(layers.sats);
   if (k === 'ships') setShips(layers.ships);
+  if (k === 'imagery') setImagery(layers.imagery);
   applyLayers(); if (TYPE[k] || k === 'quake') renderFeed();
 }
 
@@ -1523,6 +1527,7 @@ function appendEventSections(d, ev, opt = {}) {
   appendLinks(d, { lat: ev.lat, lng: ev.lng, name: ev.place, evId: ev.id, color: tcol(ev.type), km: ev.type === 'quake' ? 900 : 700 });
   appendSearchAround(d, ev);
   appendWork(d, ev);
+  appendSatPasses(d, ev.lat, ev.lng);
   appendAI(d, { eventId: ev.id }, '이 사건 Claude 브리핑');
   d.querySelectorAll('.sec').forEach((n, i) => { if (!n.style.animationDelay) n.style.animationDelay = (reduce ? 0 : 500 + i * 200) + 'ms'; });
 }
@@ -3092,11 +3097,12 @@ function drawFlat() {
   g.strokeStyle = 'rgba(120,160,200,.07)'; g.lineWidth = 1;
   for (let lo = -180; lo <= 180; lo += 30) offs.forEach(o => { const x = fx2(lo, W, o); g.beginPath(); g.moveTo(x, fy2(85, H)); g.lineTo(x, fy2(-85, H)); g.stroke(); });
   for (let la = -60; la <= 60; la += 30) { g.beginPath(); g.moveTo(0, fy2(la, H)); g.lineTo(W, fy2(la, H)); g.stroke(); }
+  if (IMG.on) drawImagery(g, W, H, offs);
   // countries
   const wp = flatWorld();
   if (wp) offs.forEach(o => {
     g.save(); g.setTransform(dpr * FL.k, 0, 0, -dpr * FL.k, dpr * fx2(0, W, o), dpr * fy2(0, H));
-    g.fillStyle = 'rgba(20,40,64,.55)'; g.fill(wp, 'evenodd');
+    if (!IMG.on) { g.fillStyle = 'rgba(20,40,64,.55)'; g.fill(wp, 'evenodd'); }
     g.lineWidth = 0.7 / FL.k; g.strokeStyle = 'rgba(140,190,235,.35)'; g.stroke(wp);
     g.restore();
   });
@@ -3331,6 +3337,7 @@ function showShipCard(s) {
   d.querySelector('.close').addEventListener('click', () => { clearTimeout(resumeTimer); resume(); });
   $('app').append(d);
   dossierEl = d;
+  appendSatPasses(d, s.lat, s.lng);
 }
 function onShipEvent(s) {
   const i = shipPts.findIndex(x => x.mmsi === s.mmsi);
@@ -3514,6 +3521,139 @@ function renderZones() {
   box.querySelectorAll('.zn-del').forEach(b => b.addEventListener('click', () => zoneDelete(b.dataset.id)));
 }
 
+// ================= SATELLITE PASSES + IMAGERY =================
+// Which Earth-observation satellites saw (or will see) a place: passes above 10°
+// elevation from 6 hours ago to 12 hours ahead, worked out in the browser from
+// CelesTrak orbits. Plus a NASA daily true-colour base map (MODIS, no key needed).
+const PASS_MIN_EL = 10;
+const passCache = new Map();   // "lat,lng" rounded -> { t, passes }
+function satKind(s) { return s.group === 'resource' ? '지구 관측' : s.group === 'stations' ? '우주정거장' : '기타'; }
+// The orbit sweep runs in a worker so the globe keeps moving while it works.
+const PASS_SRC = `
+let ready = null;
+onmessage = e => {
+  const { url, sats, lat, lng, t0, t1, step, minEl, id } = e.data;
+  if (!ready) { importScripts(url); ready = true; }
+  const obs = { latitude: satellite.degreesToRadians(lat), longitude: satellite.degreesToRadians(lng), height: 0 };
+  const out = [];
+  const elAt = (rec, t) => { const w = new Date(t), pv = satellite.propagate(rec, w); if (!pv || !pv.position || typeof pv.position === 'boolean') return -90; return satellite.radiansToDegrees(satellite.ecfToLookAngles(obs, satellite.eciToEcf(pv.position, satellite.gstime(w))).elevation); };
+  // coarse 4-minute sweep of the ground track; only close approaches get the fine check
+  const R = Math.PI / 180, la0 = lat * R, lo0 = lng * R;
+  const near = (rec, t) => { const w = new Date(t), pv = satellite.propagate(rec, w); if (!pv || !pv.position || typeof pv.position === 'boolean') return false; const g = satellite.eciToGeodetic(pv.position, satellite.gstime(w)); const d = Math.acos(Math.min(1, Math.sin(la0) * Math.sin(g.latitude) + Math.cos(la0) * Math.cos(g.latitude) * Math.cos(g.longitude - lo0))) * 6371; return d < 3600; };
+  sats.forEach((s, i) => {
+    let rec; try { rec = satellite.twoline2satrec(s.l1, s.l2); } catch { return; }
+    const C = 240000, wins = [];
+    for (let t = t0; t <= t1; t += C) if (near(rec, t)) { const a = Math.max(t0, t - C), b = Math.min(t1, t + C); if (wins.length && a <= wins[wins.length - 1][1]) wins[wins.length - 1][1] = b; else wins.push([a, b]); }
+    for (const [a, b] of wins) {
+      let cur = null;
+      for (let t = a; t <= b; t += step) {
+        const el = elAt(rec, t);
+        if (el >= minEl) { if (!cur) cur = { i, start: t, max: el, maxT: t }; if (el > cur.max) { cur.max = el; cur.maxT = t; } cur.end = t; }
+        else if (cur) { out.push(cur); cur = null; }
+      }
+      if (cur) out.push(cur);
+    }
+  });
+  postMessage({ id, out });
+};`;
+let passWorker = null, passSeq = 0;
+function passRun(msg) {
+  return new Promise((res, rej) => {
+    try {
+      if (!passWorker) passWorker = new Worker(URL.createObjectURL(new Blob([PASS_SRC], { type: 'text/javascript' })));
+      const id = ++passSeq;
+      const on = e => { if (e.data.id !== id) return; passWorker.removeEventListener('message', on); res(e.data.out); };
+      passWorker.addEventListener('message', on);
+      passWorker.onerror = err => { passWorker = null; rej(err); };
+      passWorker.postMessage({ ...msg, id });
+    } catch (err) { rej(err); }
+  });
+}
+async function satPasses(lat, lng) {
+  const key = lat.toFixed(1) + ',' + lng.toFixed(1), hit = passCache.get(key);
+  if (hit && Date.now() - hit.t < 10 * 60000) return hit.passes;
+  await loadSats();
+  const pool = satRecs.filter(s => s.group === 'resource' || s.group === 'stations');
+  const list = pool.length ? pool : satRecs;
+  const out = await passRun({ url: new URL('vendor/satellite.min.js', location.href).href, sats: list.map(s => ({ l1: s.l1, l2: s.l2 })), lat, lng, t0: Date.now() - 6 * 3600e3, t1: Date.now() + 12 * 3600e3, step: 30000, minEl: PASS_MIN_EL });
+  const passes = out.map(p => ({ ...p, s: list[p.i] })).sort((a, b) => a.maxT - b.maxT);
+  passCache.set(key, { t: Date.now(), passes });
+  return passes;
+}
+function passTrack(p) {
+  const pts = [];
+  for (let t = p.start - 4 * 60000; t <= p.end + 4 * 60000; t += 30000) { const q = satPos(p.s, new Date(t)); if (q) pts.push([q.lat, q.lng, Math.min(0.25, q.alt / 6371)]); }
+  return pts;
+}
+function showPass(p, lat, lng) {
+  const q = satPos(p.s, new Date(p.maxT));
+  world.pathsData([{ pts: passTrack(p), c: 'rgba(230,240,255,0.85)', w: 0.4 }, ...zonePaths()]);
+  if (q) world.htmlElementsData([{ mk: 'sat', id: p.s.id, name: p.s.name, ...q }]);
+  world.pointOfView({ lat: (lat + (q ? q.lat : lat)) / 2, lng, altitude: 1.1 }, T(1200));
+}
+async function appendSatPasses(d, lat, lng) {
+  if (!d || !isFinite(lat) || !isFinite(lng)) return;
+  const sec = document.createElement('div');
+  sec.className = 'sec sat-pass';
+  sec.innerHTML = `<div class="sec-h"><span>위성 통과 · 지구 관측 위성</span><b>계산 중</b></div><p class="note">궤도를 계산하는 중이에요…</p>`;
+  d.append(sec);
+  let passes = [];
+  try { passes = await satPasses(lat, lng); } catch { passes = null; }
+  if (!sec.isConnected) return;
+  if (passes == null || !satRecs.length) { sec.querySelector('b').textContent = '-'; sec.querySelector('.note').textContent = '위성 궤도 자료를 불러오지 못했어요.'; return; }
+  const now = Date.now();
+  const past = passes.filter(p => p.end < now).slice(-4).reverse(), nowP = passes.filter(p => p.start <= now && p.end >= now), next = passes.filter(p => p.start > now).slice(0, 6);
+  const row = (p, tag) => `<tr class="go" data-pass="${passes.indexOf(p)}"><td>${esc(p.s.name)} <span class="st">${satKind(p.s)}</span></td><td class="st${tag === 'now' ? ' hit' : ''}">${tag === 'now' ? '지금 위' : fmt(p.maxT, 'Asia/Seoul').slice(-5) + (tag === 'past' ? ' 지남' : '')}</td><td class="st">${Math.round(p.max)}°</td></tr>`;
+  sec.querySelector('b').textContent = `${next.length + nowP.length}개 예정`;
+  sec.innerHTML = sec.querySelector('.sec-h').outerHTML +
+    `<table class="tbl"><tbody>${[...nowP.map(p => row(p, 'now')), ...next.map(p => row(p, 'next'))].join('') || '<tr><td class="none">앞으로 12시간 안에 지나갈 관측 위성이 없어요</td></tr>'}</tbody></table>` +
+    (past.length ? `<div class="sec-h" style="margin-top:8px"><span>최근 6시간에 지나간 위성</span></div><table class="tbl"><tbody>${past.map(p => row(p, 'past')).join('')}</tbody></table>` : '') +
+    `<p class="note">고도 ${PASS_MIN_EL}° 이상으로 지나가는 때예요(KST, 가장 높이 뜨는 시각). 누르면 그 위성이 지나가는 길을 지구본에 그려요. 실제로 이곳을 찍었는지는 알 수 없어요.</p>`;
+  sec.querySelectorAll('[data-pass]').forEach(r => r.addEventListener('click', () => { const p = passes[+r.dataset.pass]; if (p) { if (S.app !== 'map') setApp('map'); showPass(p, lat, lng); } }));
+}
+
+// ---- satellite photo base map (NASA GIBS, MODIS Terra true colour) ----
+const IMG = { on: false, date: '', tiles: new Map() };
+const gibsDate = () => IMG.date || new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+const gibs3857 = (x, y, z) => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${gibsDate()}/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
+const gibs4326 = (x, y, z) => `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${gibsDate()}/250m/${z}/${y}/${x}.jpg`;
+function setImagery(on) {
+  IMG.on = on;
+  try {
+    world.globeTileEngineUrl(on ? (x, y, l) => gibs3857(x, y, Math.min(l, 9)) : null);
+    if (typeof world.globeTileEngineMaxLevel === 'function') world.globeTileEngineMaxLevel(9);
+  } catch {}
+  world.hexPolygonsData(on ? [] : countries);
+  $('imgDateWrap').hidden = !on;
+  drawFlatSoon();
+  logAct(on ? '위성 사진 켜기' : '위성 사진 끄기', on ? gibsDate() : '');
+}
+function setImageryDate(v) {
+  IMG.date = v; IMG.tiles.clear();
+  if (IMG.on) { try { world.globeTileEngineClearCache?.(); } catch {} world.globeTileEngineUrl(null); world.globeTileEngineUrl((x, y, l) => gibs3857(x, y, Math.min(l, 9))); }
+  drawFlatSoon();
+}
+// flat map: GIBS geographic tiles are 512 px; level 0 tiles cover 288°
+function drawImagery(g, W, H, offs) {
+  const want = 1 / FL.k;   // degrees per screen pixel
+  let z = 0; while (z < 8 && 0.5625 / 2 ** z > want) z++;
+  const span = 288 / 2 ** z, cols = Math.ceil(360 / span), rows = Math.ceil(180 / span);
+  const lngA = FL.lng - W / 2 / FL.k, lngB = FL.lng + W / 2 / FL.k, latA = FL.lat + H / 2 / FL.k, latB = FL.lat - H / 2 / FL.k;
+  offs.forEach(o => {
+    const c0 = Math.max(0, Math.floor((lngA - o + 180) / span)), c1 = Math.min(cols - 1, Math.floor((lngB - o + 180) / span));
+    const r0 = Math.max(0, Math.floor((90 - latA) / span)), r1 = Math.min(rows - 1, Math.floor((90 - latB) / span));
+    if (c1 - c0 > 12 || r1 - r0 > 10) return;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const url = gibs4326(c, r, z);
+      let im = IMG.tiles.get(url);
+      if (!im) { im = new Image(); im.onload = drawFlatSoon; im.onerror = () => { im.bad = true; }; im.src = url; IMG.tiles.set(url, im); if (IMG.tiles.size > 400) IMG.tiles.delete(IMG.tiles.keys().next().value); }
+      if (!im.complete || im.bad || !im.naturalWidth) continue;
+      const lng0 = -180 + c * span, lat0 = 90 - r * span;
+      g.drawImage(im, fx2(lng0, W, o), fy2(lat0, H), span * FL.k, span * FL.k);
+    }
+  });
+}
+
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
 function addQuake(q, live) {
@@ -3609,6 +3749,7 @@ function testEEW() {
   renderFeed(); focusOn(a, false, ev);
 }
 $('eewTest').addEventListener('click', testEEW);
+{ const d = $('imgDate'), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10); d.value = y; d.max = y; d.min = '2012-01-01'; d.addEventListener('change', () => setImageryDate(d.value || y)); }
 $('darkTest').addEventListener('click', () => { document.querySelector('details.tools')?.removeAttribute('open'); testDarkShip(); });
 function fireMissile() {
   const e = { id: 'm' + Date.now(), type: 'missile', mag: 9, time: Date.now(), title: '북한 탄도미사일 발사 추정 (데모)', lat: 39.66, lng: 124.70, impact: { lat: 40.9, lng: 136.2 } };
