@@ -26,6 +26,7 @@
   --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --gl: max(16px, env(safe-area-inset-left, 0px));
   --gr: max(16px, env(safe-area-inset-right, 0px));
+  --band: 18px;
   color-scheme: dark;
 }
 html, body { height: 100%; }
@@ -39,7 +40,7 @@ button { font-family: inherit; }
 
 /* ---------- top bar ---------- */
 .topbar {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  position: absolute; top: var(--band); left: 0; right: 0; z-index: 6;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding-block: 12px; padding-left: var(--gl); padding-right: var(--gr);
   background: linear-gradient(var(--bg), transparent);
@@ -63,7 +64,7 @@ button { font-family: inherit; }
 
 /* ---------- left rail ---------- */
 .rail {
-  position: absolute; z-index: 4; left: var(--gl); top: 64px; bottom: 92px; width: 310px;
+  position: absolute; z-index: 4; left: var(--gl); top: calc(var(--band) + 64px); bottom: 92px; width: 310px;
   display: flex; flex-direction: column; min-height: 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
 }
@@ -105,7 +106,7 @@ button { font-family: inherit; }
 
 /* ---------- alerts ---------- */
 .banner {
-  position: absolute; z-index: 7; left: 50%; top: 70px; transform: translateX(-50%);
+  position: absolute; z-index: 7; left: 50%; top: calc(var(--band) + 70px); transform: translateX(-50%);
   font: 600 13px var(--f-display); letter-spacing: .2em; text-transform: uppercase; white-space: nowrap;
   padding: 8px 18px; border: 1px solid var(--crit); color: #fff; background: rgba(120, 18, 10, .78);
   animation: flash .5s steps(2) 4;
@@ -115,7 +116,7 @@ button { font-family: inherit; }
 .scan { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(transparent 0, rgba(70,214,232,.10) 50%, transparent 100%); height: 30%; animation: sweep 1.4s ease-in-out 1; opacity: 0; }
 
 .dossier {
-  position: absolute; z-index: 5; right: var(--gr); top: 64px; width: 350px; max-height: calc(100% - 64px - 92px);
+  position: absolute; z-index: 5; right: var(--gr); top: calc(var(--band) + 64px); width: 350px; max-height: calc(100% - var(--band) - 64px - 92px);
   overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--crit); border-radius: 6px;
   backdrop-filter: blur(6px); padding: 14px 16px 16px; animation: dossierIn .45s cubic-bezier(.2,.8,.2,1);
 }
@@ -148,7 +149,7 @@ button { font-family: inherit; }
 .close { position: absolute; top: 8px; right: 8px; background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; }
 
 .cam {
-  position: absolute; z-index: 5; top: 120px; right: calc(var(--gr) + 362px); width: 290px;
+  position: absolute; z-index: 5; top: calc(var(--band) + 120px); right: calc(var(--gr) + 362px); width: 290px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px);
   padding: 10px; animation: dossierIn .45s cubic-bezier(.2,.8,.2,1);
 }
@@ -214,7 +215,7 @@ button { font-family: inherit; }
 
 @media (max-width: 1280px) {
   .cam { top: auto; bottom: 92px; right: var(--gr); }
-  .dossier { max-height: calc(100% - 64px - 92px - 250px); }
+  .dossier { max-height: calc(100% - var(--band) - 64px - 92px - 250px); }
 }
 @media (max-width: 1100px) { .legend { display: none; } .idx .bar { display: none; } }
 @media (max-width: 760px) {
@@ -285,6 +286,58 @@ button { font-family: inherit; }
 @media (max-height: 940px) { .keys { display: none; } }
 @media (max-width: 760px) { .search { order: 3; flex: 1 0 100%; } .search input { width: 100%; box-sizing: border-box; } .search kbd { display: none; } .sr { width: 100%; } .tl-ctl .btn { padding: 3px 7px; } .rail .srcs, .fchips span { display: none; } }
 
+/* ---------- investigation shell (Gotham-style) ---------- */
+.cls { position: absolute; top: 0; left: 0; right: 0; height: var(--band); z-index: 8; background: #1d6b3a; color: #e9fff0; font: 600 10px/var(--band) var(--f-mono); letter-spacing: .18em; text-align: center; }
+.apps { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: rgba(9,15,24,.8); }
+.apps button { font: 600 12px var(--f-body); color: var(--muted); background: none; border: 0; border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
+.apps button:last-child { border-right: 0; }
+.apps button[aria-pressed="true"] { color: var(--bg); background: var(--accent); }
+.apps kbd { font: 9px var(--f-mono); margin-left: 5px; opacity: .7; }
+.pills { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0; }
+.pill { font: 600 11px var(--f-body); color: var(--fg); background: rgba(70,214,232,.1); border: 1px solid rgba(70,214,232,.45); border-radius: 3px; padding: 2px 7px; cursor: pointer; }
+.pill b { color: var(--muted); margin-left: 3px; }
+.pill.sel { background: rgba(240,180,60,.12); border-color: rgba(240,180,60,.5); }
+.pill.go { background: none; border-style: dashed; }
+.facets { padding: 8px 12px 14px; }
+.fx-h { display: flex; justify-content: space-between; align-items: center; font: 11px var(--f-mono); color: var(--muted); margin-bottom: 6px; }
+.fx-h b { color: var(--fg); }
+.linkbtn { background: none; border: 0; color: var(--cyan); font: 600 11px var(--f-body); cursor: pointer; padding: 0; }
+.fx { margin-top: 10px; }
+.fx-t { font: 600 10px var(--f-mono); letter-spacing: .14em; color: var(--muted); margin-bottom: 4px; }
+.fx-t span { letter-spacing: 0; font-weight: 400; margin-left: 4px; }
+.fx-r { display: grid; grid-template-columns: 92px 1fr 30px; gap: 8px; align-items: center; width: 100%; background: none; border: 0; border-radius: 3px; padding: 3px 4px; color: var(--fg); cursor: pointer; font: 12px var(--f-body); text-align: left; }
+.fx-r:hover { background: rgba(255,255,255,.04); }
+.fx-r[aria-pressed="true"] { background: rgba(255,255,255,.07); box-shadow: inset 2px 0 0 var(--c); }
+.fx-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-b { height: 6px; background: rgba(255,255,255,.05); border-radius: 2px; overflow: hidden; }
+.fx-b i { display: block; height: 100%; background: var(--c); opacity: .75; }
+.fx-n { font: 11px var(--f-mono); color: var(--muted); text-align: right; }
+.feed li.ev.picked { background: rgba(240,180,60,.07); box-shadow: inset 0 0 0 1px rgba(240,180,60,.35); }
+.sa-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sa-row .btn { padding: 4px 8px; font-size: 11px; }
+.appview { position: absolute; z-index: 4; left: calc(var(--gl) + 322px); right: var(--gr); top: calc(var(--band) + 64px); bottom: 92px; background: rgba(5,8,13,.93); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; backdrop-filter: blur(4px); }
+#app[data-view="graph"] .dossier, #app[data-view="table"] .dossier { z-index: 6; }
+#app[data-view="graph"] .cam, #app[data-view="table"] .cam, #app[data-view="graph"] .banner, #app[data-view="table"] .banner { display: none; }
+.av-h { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.av-t { font: 600 11px var(--f-mono); letter-spacing: .16em; color: var(--accent); text-transform: uppercase; }
+.av-n { flex: 1; font-size: 12px; color: var(--muted); }
+.av-h .btn { padding: 4px 10px; font-size: 11px; }
+#cy { flex: 1; min-height: 0; }
+.av-f { padding: 6px 14px 8px; font: 10px var(--f-mono); color: var(--muted); border-top: 1px solid var(--line); }
+.tw { flex: 1; overflow: auto; }
+.etbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.etbl th { position: sticky; top: 0; background: #0a121c; text-align: left; padding: 0; border-bottom: 1px solid var(--line); z-index: 1; }
+.etbl th button { font: 600 10px var(--f-mono); letter-spacing: .08em; color: var(--muted); background: none; border: 0; padding: 8px; cursor: pointer; white-space: nowrap; }
+.etbl th:first-child { padding: 8px; width: 24px; }
+.etbl td { padding: 7px 8px; border-bottom: 1px solid rgba(28,42,59,.6); font-family: var(--f-mono); white-space: nowrap; }
+.etbl td.tt { font-family: var(--f-body); white-space: normal; cursor: pointer; min-width: 260px; }
+.etbl td.tt:hover { color: #fff; text-decoration: underline; }
+.etbl td.pp { font-size: 8px; letter-spacing: 1px; }
+.etbl tr.on td { background: rgba(240,180,60,.06); }
+.etbl .none { font-family: var(--f-body); color: var(--muted); }
+@media (max-width: 1100px) { .apps kbd { display: none; } }
+@media (max-width: 760px) { :root { --band: 14px; } .cls { font-size: 8px; } .appview { left: var(--gl); bottom: calc(86px + 30%); } .apps button { padding: 5px 8px; } }
+
 /* ---------- local-version additions ---------- */
 .srcs { display: flex; gap: 10px; font: 10px var(--f-mono); color: var(--muted); letter-spacing: .06em; }
 .srcs span::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; background: #3a5068; }
@@ -327,33 +380,101 @@ button { font-family: inherit; }
 .reticle.news .box::before, .reticle.news .box::after { background: var(--news); }
 .reticle.news .tag { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1600px) { .idx .bar { display: none; } }
+
+/* ---------- type screens ---------- */
+.screens { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: rgba(9,15,24,.8); }
+.screens button { font: 600 12px var(--f-body); color: var(--muted); background: none; border: 0; border-right: 1px solid var(--line); padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.screens button:last-child { border-right: 0; }
+.screens kbd { font: 9px var(--f-mono); margin-left: 5px; opacity: .7; }
+@media (max-width: 1400px) { .screens kbd { display: none; } }
+.screens button:hover, .apps button:hover { color: var(--fg); }
+.screens button[aria-pressed="true"] { color: var(--bg); background: var(--cyan); }
+.tools { position: relative; }
+.tools summary { list-style: none; cursor: pointer; }
+.tools summary::-webkit-details-marker { display: none; }
+.tools-m { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 170px; }
+.tools-m .btn { text-align: left; }
+.tools-m #sound { display: block; }
+.typepanel { position: absolute; z-index: 4; right: var(--gr); top: calc(var(--band) + 64px); width: 350px; max-height: calc(100% - var(--band) - 64px - 92px); overflow-y: auto; box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--tc, var(--cyan)); border-radius: 6px; backdrop-filter: blur(6px); padding: 12px 16px 16px; }
+.tp-h { display: flex; align-items: center; justify-content: space-between; }
+.tp-t { font: 600 11px var(--f-mono); letter-spacing: .16em; color: var(--tc, var(--cyan)); text-transform: uppercase; }
+.tp-h .close { position: static; }
+.typepanel .note { margin: 8px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.kpis div { border: 1px solid var(--line); border-radius: 4px; padding: 7px 6px; background: rgba(255,255,255,.02); }
+.kpis b { display: block; font: 600 17px var(--f-mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.kpis span { font-size: 10px; color: var(--muted); }
+.hbars { display: grid; gap: 4px; }
+.hb { display: grid; grid-template-columns: 104px 1fr 30px; gap: 8px; align-items: center; font-size: 12px; padding: 2px 4px; border-radius: 3px; }
+.hb[data-ev] { cursor: pointer; }
+.hb[data-ev]:hover { background: rgba(255,255,255,.04); }
+.hb .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb .b { height: 6px; background: rgba(255,255,255,.05); border-radius: 2px; overflow: hidden; }
+.hb .b i { display: block; height: 100%; opacity: .8; }
+.hb .n { font: 11px var(--f-mono); color: var(--muted); text-align: right; }
+.hist { display: flex; align-items: flex-end; gap: 2px; height: 60px; border-bottom: 1px solid var(--line); }
+.hist i { flex: 1; min-height: 1px; background: var(--tc, #b48cff); opacity: .75; border-radius: 1px 1px 0 0; }
+.hist-ax { display: flex; justify-content: space-between; font: 10px var(--f-mono); color: var(--muted); margin-top: 3px; }
+.scatter { width: 100%; height: auto; display: block; }
+.scatter .gl { stroke: rgba(255,255,255,.08); }
+.scatter .ax { fill: var(--muted); font: 9px var(--f-mono); }
+.scatter circle { cursor: pointer; }
+.tp-row { font-size: 13px; padding: 6px 4px; border-radius: 3px; cursor: pointer; }
+.tp-row:hover, .typepanel tr.go:hover { background: rgba(255,255,255,.04); }
+.typepanel tr.go { cursor: pointer; }
+#app:has(> .dossier) .appview { right: calc(var(--gr) + 362px); }
+#app:not([data-view="map"]) .typepanel { display: none; }
+@media (max-width: 1400px) { .screens button { padding: 6px 8px; } }
+@media (max-width: 760px) {
+  .typepanel { top: auto; bottom: calc(86px + 30%); left: var(--gl); width: auto; max-height: 40%; }
+  .screens { order: 4; }
+  .screens button { padding: 5px 8px; font-size: 11px; }
+}
+
+/* keep the top bar on one line on desktop */
+@media (min-width: 761px) { .topbar { flex-wrap: nowrap; } .topbar > * { flex-shrink: 0; } .topbar .search { flex: 0 1 240px; min-width: 120px; } .topbar .search input { width: 100%; box-sizing: border-box; } .topbar .spacer { flex: 1 1 0; } }
+@media (max-width: 1720px) { .topbar .idx { display: none; } }
+@media (max-width: 1500px) { .clock .utc, .topbar .btn kbd, .apps kbd { display: none; } }
+@media (max-width: 1240px) { .topbar .clock, .brand small { display: none; } .topbar { gap: 10px; } }
+@media (max-width: 1060px) { .brand { font-size: 0; } .brand b { font-size: 15px; } #next { display: none; } }
 </style>
 
 </head>
 <body>
-<div id="app">
+<div id="app" data-view="map">
+  <div class="cls" role="note">UNCLASSIFIED // OSINT · 공개 출처 정보만 다뤄요</div>
   <div id="globe" aria-label="실시간 경보 지구본"></div>
 
   <div class="topbar">
     <div class="brand"><b>◢</b> Watchfloor<small>LIVE</small></div>
+    <div class="apps" role="group" aria-label="앱 전환"><button type="button" data-app="map" aria-pressed="true">지도<kbd>M</kbd></button><button type="button" data-app="graph" aria-pressed="false">그래프<kbd>G</kbd></button><button type="button" data-app="table" aria-pressed="false">표<kbd>T</kbd></button></div>
+    <div class="screens" role="group" aria-label="유형별 전용 화면"><button type="button" data-screen="quake" aria-pressed="false">지진<kbd>⇧1</kbd></button><button type="button" data-screen="disaster" aria-pressed="false">재난·태풍<kbd>⇧2</kbd></button><button type="button" data-screen="air" aria-pressed="false">항공<kbd>⇧3</kbd></button><button type="button" data-screen="news" aria-pressed="false">뉴스·분쟁<kbd>⇧4</kbd></button></div>
     <div class="clock"><span class="utc">UTC <b id="utc">--:--:--</b></span><span>KST <b id="kst">--:--:--</b></span></div>
     <div class="idx" title="최근 48시간 지진 규모로 계산한 자체 활동 지수예요"><span>활동 지수</span><span class="bar"><i id="idxBar"></i></span><b id="idxVal">0</b><span class="lv" id="idxLv">안정</span></div>
     <div class="search" role="search"><input id="q" type="search" placeholder="장소, 사건, 기사 검색" aria-label="장소나 사건 검색" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sr"><kbd>/</kbd><div class="sr" id="sr" role="listbox" hidden></div></div>
     <div class="spacer"></div>
     <button class="btn" id="pause" aria-pressed="false" type="button">자동 이동 끄기<kbd>Space</kbd></button>
     <button class="btn" id="next" type="button">다음 사건<kbd>N</kbd></button>
-    <button class="btn warn" id="eewTest" type="button">속보 테스트<kbd>E</kbd></button>
-    <button class="btn warn" id="jalert" type="button">J-Alert 데모<kbd>J</kbd></button>
-    <button class="btn" id="sound" aria-pressed="false" type="button">소리 켜기</button>
+    <details class="tools"><summary class="btn">도구 ▾</summary><div class="tools-m">
+      <button class="btn warn" id="eewTest" type="button">속보 테스트<kbd>E</kbd></button>
+      <button class="btn warn" id="jalert" type="button">J-Alert 데모<kbd>J</kbd></button>
+      <button class="btn" id="sound" aria-pressed="false" type="button">소리 켜기</button>
+    </div></details>
   </div>
+
+  <aside class="typepanel" id="typePanel" hidden aria-label="유형별 전용 화면"></aside>
 
   <aside class="rail">
     <div class="tabs" role="tablist">
       <button role="tab" id="tabFeed" aria-selected="true" aria-controls="paneFeed" type="button"><span class="live" id="liveDot">실시간 피드</span></button>
+      <button role="tab" id="tabFacets" aria-selected="false" aria-controls="paneFacets" type="button">분포</button>
       <button role="tab" id="tabBrief" aria-selected="false" aria-controls="paneBrief" type="button">상황 브리핑</button>
     </div>
     <div class="stats"><span><b id="stCount">0</b>24시간 사건</span><span><b id="stMax">0</b>주요 사건</span><span><b id="stCrit">0</b>분쟁</span><span><b id="stNuke">0</b>재난</span></div>
+    <div class="pills" id="pills" hidden></div>
     <div class="pane" id="paneFeed" role="tabpanel"><div class="fchips" id="evFilters" aria-label="사건 유형"></div><ul class="feed" id="feed"></ul></div>
+    <div class="pane" id="paneFacets" role="tabpanel" hidden><div class="facets" id="facets"></div></div>
     <div class="pane" id="paneBrief" role="tabpanel" hidden>
       <div class="brief">
         <div class="ai" id="aiRow"><input id="aiPw" type="password" placeholder="비밀번호" autocomplete="current-password" aria-label="AI 분석 비밀번호" hidden style="font:13px var(--f-body);background:rgba(20,32,48,.8);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;width:110px"><button class="btn" id="aiBtn" type="button">Claude 분석 요청</button><small id="aiNote"></small></div>
@@ -363,8 +484,18 @@ button { font-family: inherit; }
     </div>
     <div class="layers" id="layers"><span class="lbl">레이어</span></div>
     <div class="srcs" id="srcs"><span data-k="usgs">USGS</span><span data-k="jma">JMA</span><span data-k="news">뉴스</span><span data-k="hazards">NASA 재해</span><span data-k="aircraft">항공</span><span data-k="sats">위성</span><span data-k="ships">선박</span><span data-k="webcams">웹캠</span><span data-k="ai">AI</span></div>
-    <div class="keys"><kbd>Space</kbd> 자동 이동 · <kbd>N</kbd> 다음 사건 · <kbd>/</kbd> 검색 · <kbd>E</kbd> 속보 테스트 · <kbd>J</kbd> 미사일 데모 · <kbd>1</kbd>–<kbd>9</kbd> 레이어 · <kbd>Esc</kbd> 닫기</div>
+    <div class="keys"><kbd>Space</kbd> 자동 이동 · <kbd>N</kbd> 다음 사건 · <kbd>/</kbd> 검색 · <kbd>M</kbd><kbd>G</kbd><kbd>T</kbd> 지도·그래프·표 · <kbd>E</kbd> 속보 테스트 · <kbd>J</kbd> 미사일 데모 · <kbd>1</kbd>–<kbd>9</kbd> 레이어 · <kbd>Esc</kbd> 닫기</div>
   </aside>
+
+  <section class="appview" id="graphApp" hidden aria-label="그래프">
+    <div class="av-h"><span class="av-t">그래프</span><span class="av-n" id="graphNote"></span><button type="button" class="btn" id="graphFit">맞춤</button><button type="button" class="btn" id="graphClear">선택 지우기</button></div>
+    <div id="cy"></div>
+    <div class="av-f">사건 노드를 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 나라나 출처 노드를 누르면 그걸로 좁혀요 · 사건에서 오른쪽 클릭은 반경 300km 확장</div>
+  </section>
+  <section class="appview" id="tableApp" hidden aria-label="표">
+    <div class="av-h"><span class="av-t">사건 표</span><span class="av-n" id="tableNote"></span></div>
+    <div class="tw"><table class="etbl"><thead></thead><tbody></tbody></table></div>
+  </section>
 
   <div class="timeline">
     <div class="tl-ctl"><button class="btn" id="tlPlay" type="button" aria-pressed="false">▶ 재생</button><button class="btn" id="tlLive" type="button" hidden>● 실시간</button></div>
@@ -384,6 +515,7 @@ button { font-family: inherit; }
 
 <script src="vendor/globe.gl.min.js"></script>
 <script src="vendor/satellite.min.js"></script>
+<script src="vendor/cytoscape.min.js"></script>
 <script>
 // ================= REFERENCE DATA =================
 // [ko, en, lat, lng, coastal]
@@ -486,8 +618,8 @@ const world = new Globe(el)
   .polygonsTransitionDuration(0)
   .pointLat('lat').pointLng('lng')
   .pointAltitude(d => d.mk === 'ev' ? (d.ev.type === 'quake' ? 0.012 + d.ev.severity * 0.022 : 0.008 + d.ev.severity * 0.01) : d.type === 'ship' ? 0.003 : d.type === 'ac' ? 0.006 + Math.min(d.alt, 45000) / 45000 * 0.03 : (d.mag - 4) / 25)
-  .pointRadius(d => d.mk === 'ev' ? 0.13 + d.ev.severity * 0.07 + Math.min(0.2, Math.log2(d.ev.signals.length) * 0.05) : d.type === 'ship' ? 0.06 : d.type === 'ac' ? 0.07 : 0.18 + Math.max(0, d.mag - 4.5) * 0.12)
-  .pointColor(d => d.mk === 'ev' ? (d.ev.status === 'closed' ? rgba(tcol(d.ev.type), 0.45) : tcol(d.ev.type)) : d.type === 'ship' ? 'rgba(94,224,176,0.85)' : d.type === 'ac' ? (d.ground ? 'rgba(160,170,180,0.6)' : '#f4f8ff') : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[sev(d)])
+  .pointRadius(d => d.mk === 'ev' ? (S.sel.has(d.ev.id) ? 0.12 : 0) + 0.13 + d.ev.severity * 0.07 + Math.min(0.2, Math.log2(d.ev.signals.length) * 0.05) : d.type === 'ship' ? 0.06 : d.type === 'ac' ? 0.07 : 0.18 + Math.max(0, d.mag - 4.5) * 0.12)
+  .pointColor(d => d.mk === 'ev' ? (S.sel.size && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.18) : d.ev.status === 'closed' && !S.sel.has(d.ev.id) ? rgba(tcol(d.ev.type), 0.45) : tcol(d.ev.type)) : d.type === 'ship' ? 'rgba(94,224,176,0.85)' : d.type === 'ac' ? (d.ground ? 'rgba(160,170,180,0.6)' : '#f4f8ff') : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[sev(d)])
   .pointLabel(d => d.mk === 'ev' ? tip(`<b style="color:${tcol(d.ev.type)}">${esc(TYPE[d.ev.type]?.ko || '')}</b> · ${pips(d.ev.severity)} · 출처 ${d.ev.sources.length}<br>${esc(d.ev.title)}<br><span style="color:#7a8ea3">${esc(d.ev.place)} · ${ago(d.ev.updated)}</span>`, rgba(tcol(d.ev.type), .5))
     : d.type === 'ship' ? tip(`선박 · ${esc(d.name || 'MMSI ' + d.mmsi)}<br>${d.sog != null ? d.sog + ' kn' : ''}${d.dest ? ' · ' + esc(d.dest) : ''}`)
     : d.type === 'ac' ? tip(`${esc(d.flight)} ${esc(d.type2 || '')}<br>${d.ground ? '지상' : Math.round(d.alt).toLocaleString() + ' ft'}${d.gs ? ' · ' + Math.round(d.gs) + ' kt' : ''}`)
@@ -555,13 +687,14 @@ const recentQuakes = () => events.filter(e => e.time > Date.now() - 7 * 864e5);
 function applyLayers() {
   world.pointsData([...evMarkers(), ...(layers.aircraft ? acPoints : []), ...(layers.ships ? shipPts : [])]);
   world.labelsData([...(layers.plant ? PLANTS : []), ...(layers.choke ? CHOKES : []), ...(layers.sats ? satPts : [])]);
-  world.arcsData([...(layers.route ? ROUTE_PAIRS : []), ...missileArcs, ...linkArcs]);
+  const selArcs = S.links.map(l => { const a = EV.get(l.a), b = EV.get(l.b) || S.extra.get(l.b); return a && b && isFinite(b.lat) ? { type: 'link', startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, c: '#46d6e8' } : null; }).filter(Boolean);
+  world.arcsData([...(layers.route ? ROUTE_PAIRS : []), ...missileArcs, ...linkArcs, ...selArcs]);
   world.hexBinPointsData(conflictHeat());
   world.polygonsData([...countries, ...(layers.night ? nightCells : [])]);
 }
 buildNight();
 setInterval(() => { buildNight(); if (layers.night) applyLayers(); }, 300000);
-fetch('countries.geojson').then(r => r.json()).then(g => { countries = g.features; world.hexPolygonsData(g.features); applyLayers(); }).catch(() => {});
+fetch('countries.geojson').then(r => r.json()).then(g => { countries = g.features; world.hexPolygonsData(g.features); countryCache.clear(); countryCentres = null; applyLayers(); emit(); }).catch(() => {});
 
 const LAYER_DEFS = [['quake', '지진', '#f0b43c'], ['conflict', '분쟁', '#ff5c5c'], ['disaster', '재난', '#ff9f43'], ['accident', '사고', '#ffd166'], ['news', '주요 뉴스', '#b48cff'], ['plant', '원전', '#c6f05a'], ['choke', '해상 요충지', '#46d6e8'], ['aircraft', '항공기', '#f4f8ff'], ['sats', '위성', '#e6f0ff'], ['ships', '선박', '#5ee0b0'], ['route', '주요 항로', '#96d7ff'], ['night', '낮/밤', '#5b6b7c']];
 LAYER_DEFS.forEach(([k, label, c], i) => {
@@ -619,7 +752,7 @@ function setStatus(s) {
 // ================= FEED / TABS / STATS =================
 const feedEl = $('feed');
 function selectTab(which) {
-  [['feed', 'tabFeed', 'paneFeed'], ['brief', 'tabBrief', 'paneBrief']].forEach(([k, t, p]) => {
+  [['feed', 'tabFeed', 'paneFeed'], ['facets', 'tabFacets', 'paneFacets'], ['brief', 'tabBrief', 'paneBrief']].forEach(([k, t, p]) => {
     $(t).setAttribute('aria-selected', k === which); $(p).hidden = k !== which;
   });
 }
@@ -714,7 +847,7 @@ function renderTimeline() {
   $('tlStart').textContent = fmt(tMin, 'Asia/Seoul');
   const track = $('tlTrack');
   track.querySelectorAll('button').forEach(b => b.remove());
-  [...EV.values()].filter(ev => ev.start > tMin && evOn(ev) && (ev.severity >= 2 || ev.type === 'quake')).forEach(ev => {
+  [...EV.values()].filter(ev => ev.start > tMin && evOn(ev) && passes(ev) && (ev.severity >= 2 || ev.type === 'quake')).forEach(ev => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'on ty' + (ev.id === currentId ? ' cur' : '');
     b.style.setProperty('--tc', tcol(ev.type));
@@ -743,7 +876,7 @@ function clearFx() {
 function resume() {
   clearFx(); missileArcs = []; acPoints = []; applyLayers(); currentId = null; currentFocus = null; renderTimeline();
   world.pointOfView({ altitude: 2.3 }, T(2200));
-  setTimeout(() => { ctl.autoRotate = !reduce; busy = false; if (cinemaQueue.length && !paused) { const n = cinemaQueue.shift(); n.mk === 'ev' ? openEvent(n.ev) : n.type === 'tsunami' ? tsunamiFocus(n) : focusOn(n); } }, T(2300));
+  setTimeout(() => { ctl.autoRotate = !reduce; busy = false; if (S.screen === 'disaster') world.pathsData(stormPaths); if (S.screen === 'air') loadAirArea(true); if (cinemaQueue.length && !paused) { const n = cinemaQueue.shift(); n.mk === 'ev' ? openEvent(n.ev) : n.type === 'tsunami' ? tsunamiFocus(n) : focusOn(n); } }, T(2300));
 }
 function showBanner(text, cls) {
   const b = document.createElement('div');
@@ -1025,7 +1158,6 @@ const anchorOf = ev => ev.signals.find(s => s.id === ev.anchor) || ev.signals[0]
 const quakeMag = ev => { const m = /^M([\d.]+)/.exec(ev.title); return m ? m[1] : null; };
 
 let viewRange = null;            // [from, to] while browsing the past; null = live
-let evFilter = 'all';
 let lastAutoFly = 0;
 let linkArcs = [];
 
@@ -1046,7 +1178,7 @@ function inView(ev) {
   return ev.start <= viewRange[1] && ev.updated >= viewRange[0];
 }
 function evList(type) {
-  return [...EV.values()].filter(inView)
+  return [...EV.values()].filter(inView).filter(ev => passes(ev))
     .filter(ev => !type || type === 'all' || typeLayer(ev.type) === type)
     .sort((a, b) => b.updated - a.updated);
 }
@@ -1056,20 +1188,22 @@ const evOn = ev => layers[typeLayer(ev.type)] !== false;
 const FILTERS = [['all', '전체'], ['quake', '지진'], ['conflict', '분쟁'], ['disaster', '재난'], ['accident', '사고'], ['news', '뉴스']];
 function renderFilters() {
   const box = $('evFilters');
-  const all = evList('all');
+  const all = [...EV.values()].filter(inView).filter(ev => passes(ev, 'type'));
   box.replaceChildren(...FILTERS.map(([k, label]) => {
     const n = k === 'all' ? all.length : all.filter(ev => typeLayer(ev.type) === k).length;
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'fchip'; b.setAttribute('aria-pressed', evFilter === k);
+    const tf = S.filters.type;
+    b.type = 'button'; b.className = 'fchip'; b.setAttribute('aria-pressed', k === 'all' ? !tf.size : tf.size === 1 && tf.has(k));
     if (k !== 'all') b.style.setProperty('--c', tcol(k));
     b.innerHTML = `${label}<span>${n}</span>`;
-    b.addEventListener('click', () => { evFilter = k; renderFeed(); });
+    b.addEventListener('click', () => { if (k === 'all') { S.filters.type.clear(); emit(); } else setFilter('type', k, true); });
     return b;
   }));
 }
 function evItem(ev, animate) {
   const li = document.createElement('li');
-  li.className = 'ev sev-' + lvl(ev) + (animate ? ' new' : '') + (ev.status === 'closed' ? ' closed' : '');
+  li.className = 'ev sev-' + lvl(ev) + (animate ? ' new' : '') + (ev.status === 'closed' ? ' closed' : '') + (S.sel.has(ev.id) ? ' picked' : '');
+  li.title = 'Shift+클릭으로 선택에 추가';
   li.tabIndex = 0;
   li.style.setProperty('--tc', tcol(ev.type));
   const big = ev.type === 'quake' && quakeMag(ev) ? 'M' + quakeMag(ev) : ev.type === 'news' ? '뉴스' : TYPE[ev.type]?.ko || ev.typeKo;
@@ -1077,14 +1211,14 @@ function evItem(ev, animate) {
   li.innerHTML = `<div class="ek"><b>${esc(big)}</b><span class="pp" aria-label="심각도 ${ev.severity}/5">${pips(ev.severity)}</span></div>
     <div><div class="place">${ev.flash ? '<span class="src-tag news">속보</span>' : ''}${esc(ev.title)}</div>
     <div class="meta">${esc(ev.place)} · ${ago(ev.updated)} · 출처 ${ev.sources.length}${n.signals > 1 ? ' · 신호 ' + n.signals : ''}${ev.status === 'closed' ? ' · 종료' : ''}</div></div>`;
-  const go = () => openEvent(ev, true);
-  li.addEventListener('click', go);
-  li.addEventListener('keydown', k => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); k.stopPropagation(); go(); } });
+  const go = () => { cinemaQueue = []; openEvent(ev, true); };
+  li.addEventListener('click', e => e.shiftKey || e.metaKey || e.ctrlKey ? select(ev.id, true) : go());
+  li.addEventListener('keydown', k => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); k.stopPropagation(); k.shiftKey ? select(ev.id, true) : go(); } });
   return li;
 }
 function renderFeed() {
-  renderFilters();
-  const list = evList(evFilter).slice(0, 150);
+  renderFilters(); renderPills();
+  const list = evList('all').slice(0, 150);
   if (!list.length) {
     const li = document.createElement('li'); li.className = 'empty';
     li.textContent = viewRange ? '이 구간에는 사건이 없어요.' : '아직 받은 사건이 없어요. 데이터가 들어오면 여기에 쌓여요.';
@@ -1202,6 +1336,7 @@ function appendEventSections(d, ev, opt = {}) {
   box.innerHTML = html;
   [...box.children].forEach(n => d.append(n));
   appendLinks(d, { lat: ev.lat, lng: ev.lng, name: ev.place, evId: ev.id, color: tcol(ev.type), km: ev.type === 'quake' ? 900 : 700 });
+  appendSearchAround(d, ev);
   appendAI(d, { eventId: ev.id }, '이 사건 Claude 브리핑');
   d.querySelectorAll('.sec').forEach((n, i) => { if (!n.style.animationDelay) n.style.animationDelay = (reduce ? 0 : 500 + i * 200) + 'ms'; });
 }
@@ -1518,6 +1653,453 @@ function startReplay() {
   $('tlLive').addEventListener('click', () => { stopReplay(); setRange(null); });
 })();
 
+// ================= INVESTIGATION STORE (shared selection + filters) =================
+// One store that every app reads: feed, globe, timeline, histograms, graph, table.
+// Selecting or filtering in one app changes all of them.
+const S = {
+  app: 'map',
+  filters: { type: new Set(), country: new Set(), source: new Set(), sev: new Set() },
+  sel: new Set(),           // selected event ids
+  links: [],                // Search Around edges: { a, b, label, k }
+  extra: new Map()          // non-event nodes added by Search Around (facilities)
+};
+const FACETS = [['type', '유형'], ['country', '나라'], ['source', '출처'], ['sev', '심각도']];
+const KO_COUNTRY = { 'South Korea': '한국', 'North Korea': '북한', Japan: '일본', China: '중국', Taiwan: '대만', Russia: '러시아', Ukraine: '우크라이나', Israel: '이스라엘', Palestine: '팔레스타인', Lebanon: '레바논', Syria: '시리아', Iran: '이란', Iraq: '이라크', Yemen: '예멘', 'Saudi Arabia': '사우디', Turkey: '튀르키예', Egypt: '이집트', Afghanistan: '아프가니스탄', Pakistan: '파키스탄', India: '인도', Indonesia: '인도네시아', Philippines: '필리핀', Vietnam: '베트남', Thailand: '태국', Myanmar: '미얀마', Malaysia: '말레이시아', Australia: '호주', 'New Zealand': '뉴질랜드', 'Papua New Guinea': '파푸아뉴기니', Vanuatu: '바누아투', Fiji: '피지', Tonga: '통가', 'United States of America': '미국', 'United States': '미국', Canada: '캐나다', Mexico: '멕시코', Guatemala: '과테말라', Colombia: '콜롬비아', Peru: '페루', Chile: '칠레', Argentina: '아르헨티나', Brazil: '브라질', Ecuador: '에콰도르', Venezuela: '베네수엘라', 'United Kingdom': '영국', France: '프랑스', Germany: '독일', Italy: '이탈리아', Spain: '스페인', Greece: '그리스', Poland: '폴란드', Belgium: '벨기에', Netherlands: '네덜란드', Sudan: '수단', 'South Sudan': '남수단', Ethiopia: '에티오피아', Somalia: '소말리아', Kenya: '케냐', Nigeria: '나이지리아', 'Dem. Rep. Congo': '콩고민주공화국', 'South Africa': '남아공', Libya: '리비아', Mongolia: '몽골', Nepal: '네팔', Bangladesh: '방글라데시', Tajikistan: '타지키스탄', Kazakhstan: '카자흐스탄', Iceland: '아이슬란드', Greenland: '그린란드', Cuba: '쿠바', Haiti: '아이티' };
+
+// ---- country of an event (point in polygon on the loaded country shapes) ----
+const countryCache = new Map();
+function inRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+let countryCentres = null;
+function evCountry(ev) {
+  if (!isFinite(ev.lat)) return '미상';
+  const a = anchorOf(ev);
+  const key = (a && a.kind === 'news' && a.scope === 'country' ? 'p:' + a.place : '') || ev.lat.toFixed(2) + ',' + ev.lng.toFixed(2);
+  if (countryCache.has(key)) return countryCache.get(key);
+  if (!countries.length) return '미상';
+  // country-level news: the place name already is the country
+  if (a && a.kind === 'news' && a.scope === 'country') { countryCache.set(key, a.place); return a.place; }
+  const lat = isFinite(a?.lat) ? a.lat : ev.lat, lng = isFinite(a?.lng) ? a.lng : ev.lng;
+  let name = null;
+  for (const f of countries) {
+    const g = f.geometry; if (!g) continue;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    if (polys.some(p => inRing(lng, lat, p[0]))) { name = f.properties.n || f.properties.name; break; }
+  }
+  if (!name) {
+    // offshore: nearest country centre within 600 km, otherwise "해상"
+    countryCentres ??= countries.map(f => {
+      const g = f.geometry; const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+      let sx = 0, sy = 0, n = 0; polys.forEach(p => p[0].forEach(([x, y]) => { sx += x; sy += y; n++; }));
+      return { name: f.properties.n || f.properties.name, lat: sy / n, lng: sx / n, pts: polys.flatMap(p => p[0].filter((_, i) => i % 4 === 0)) };
+    });
+    let best = null, bd = 600;
+    for (const c of countryCentres) {
+      if (Math.abs(c.lat - lat) > 15) continue;
+      for (const [x, y] of c.pts) { const d = distKm(lat, lng, y, x); if (d < bd) { bd = d; best = c.name; } }
+    }
+    name = best || '해상';
+  }
+  const ko = KO_COUNTRY[name] || name;
+  countryCache.set(key, ko);
+  return ko;
+}
+
+// ---- filters ----
+function facetValues(ev, k) {
+  if (k === 'type') return [typeLayer(ev.type)];
+  if (k === 'country') return [evCountry(ev)];
+  if (k === 'source') return ev.sources;
+  if (k === 'sev') return [String(ev.severity)];
+  return [];
+}
+function passes(ev, skip) {
+  for (const [k] of FACETS) {
+    if (k === skip) continue;
+    const f = S.filters[k];
+    if (f.size && !facetValues(ev, k).some(v => f.has(v))) return false;
+  }
+  return true;
+}
+const anyFilter = () => FACETS.some(([k]) => S.filters[k].size);
+function setFilter(k, v, only) {
+  const f = S.filters[k];
+  if (only) { const had = f.size === 1 && f.has(v); f.clear(); if (!had) f.add(v); }
+  else f.has(v) ? f.delete(v) : f.add(v);
+  emit();
+}
+function clearFilters() { FACETS.forEach(([k]) => S.filters[k].clear()); emit(); }
+function facetLabel(k, v) { return k === 'type' ? (TYPE[v]?.ko || v) : k === 'sev' ? '심각도 ' + v : v; }
+
+// ---- selection ----
+function select(id, add) {
+  if (!add) S.sel.clear();
+  S.sel.has(id) && add ? S.sel.delete(id) : S.sel.add(id);
+  emit();
+}
+function clearSelection() { S.sel.clear(); S.links = []; S.extra.clear(); emit(); }
+
+let emitTimer = null;
+function emit() {
+  clearTimeout(emitTimer);
+  emitTimer = setTimeout(() => {
+    renderFeed(); applyLayers(); updateStats(); renderTimeline(); renderFacets();
+    if (S.app === 'graph') renderGraph();
+    if (S.app === 'table') renderTable();
+    if (S.screen) { const st = $('typePanel').scrollTop; renderScreen(); $('typePanel').scrollTop = st; }
+  }, 30);
+}
+
+// ---- pills above the feed: active filters + selection ----
+function renderPills() {
+  const box = $('pills');
+  const parts = [];
+  FACETS.forEach(([k, label]) => S.filters[k].forEach(v => parts.push(`<button type="button" class="pill" data-k="${k}" data-v="${esc(v)}">${esc(label)}: ${esc(facetLabel(k, v))} <b aria-hidden="true">×</b></button>`)));
+  if (S.sel.size) parts.push(`<button type="button" class="pill sel" data-sel="1">선택 ${S.sel.size}건 <b aria-hidden="true">×</b></button><button type="button" class="pill go" data-graph="1">그래프로 보기</button>`);
+  box.innerHTML = parts.join('');
+  box.hidden = !parts.length;
+  box.querySelectorAll('.pill').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.graph) return setApp('graph');
+    if (b.dataset.sel) return clearSelection();
+    setFilter(b.dataset.k, b.dataset.v);
+  }));
+}
+
+// ---- property histograms (helper panel) ----
+function renderFacets() {
+  const box = $('facets'); if (!box) return;
+  const base = [...EV.values()].filter(inView);
+  let html = `<div class="fx-h"><span>보이는 사건 <b>${evList('all').length}</b> / ${base.length}</span>${anyFilter() ? '<button type="button" class="linkbtn" id="fxClear">필터 지우기</button>' : ''}</div>`;
+  FACETS.forEach(([k, label]) => {
+    const counts = new Map();
+    base.filter(ev => passes(ev, k)).forEach(ev => facetValues(ev, k).forEach(v => counts.set(v, (counts.get(v) || 0) + 1)));
+    let rows = [...counts.entries()];
+    if (k === 'sev') rows.sort((a, b) => b[0] - a[0]); else rows.sort((a, b) => b[1] - a[1]);
+    const total = rows.length; rows = rows.slice(0, k === 'type' || k === 'sev' ? 6 : 10);
+    const max = Math.max(1, ...rows.map(r => r[1]));
+    html += `<div class="fx"><div class="fx-t">${label}${total > rows.length ? ` <span>상위 ${rows.length} / ${total}</span>` : ''}</div>${rows.map(([v, n]) => {
+      const on = S.filters[k].has(v);
+      const c = k === 'type' ? tcol(v) : k === 'sev' ? ['#5b6b7c', '#7cc0ff', '#f0b43c', '#ff7a3c', '#ff4d3d'][+v - 1] : 'var(--cyan)';
+      return `<button type="button" class="fx-r" data-k="${k}" data-v="${esc(v)}" aria-pressed="${on}" style="--c:${c}"><span class="fx-l">${esc(facetLabel(k, v))}</span><span class="fx-b"><i style="width:${Math.round(n / max * 100)}%"></i></span><span class="fx-n">${n}</span></button>`;
+    }).join('') || '<p class="note">해당 없음</p>'}</div>`;
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('.fx-r').forEach(b => b.addEventListener('click', e => setFilter(b.dataset.k, b.dataset.v, !(e.shiftKey || e.metaKey || e.ctrlKey))));
+  $('fxClear')?.addEventListener('click', clearFilters);
+}
+
+// ---- Search Around: expand one object by a link type ----
+const AROUND = [
+  ['near', '반경 300km 사건', ev => evList('all').filter(o => o.id !== ev.id && distKm(ev.lat, ev.lng, o.lat, o.lng) <= 300)],
+  ['country', '같은 나라 사건', ev => { const c = evCountry(ev); return evList('all').filter(o => o.id !== ev.id && evCountry(o) === c); }],
+  ['source', '같은 출처 보도', ev => evList('all').filter(o => o.id !== ev.id && o.sources.some(s => ev.sources.includes(s) && !['USGS', '일본 기상청'].includes(s)))],
+  ['type48', '같은 유형 · 48시간', ev => evList('all').filter(o => o.id !== ev.id && o.type === ev.type && Math.abs(o.updated - ev.updated) < 48 * 3600e3)],
+  ['assets', '주변 시설 (원전·해협)', null]
+];
+function searchAround(ev, kind) {
+  ev = EV.get(ev.id) || ev;
+  S.sel.add(ev.id);
+  const def = AROUND.find(a => a[0] === kind);
+  let n = 0;
+  if (kind === 'assets') {
+    related({ lat: ev.lat, lng: ev.lng }, 600, ev.id).filter(x => x.k === 'plant' || x.k === 'choke').forEach(x => {
+      const id = 'f:' + x.label;
+      S.extra.set(id, { id, label: x.label, k: x.k, lat: x.lat, lng: x.lng });
+      S.links.push({ a: ev.id, b: id, label: Math.round(x.d) + 'km', k: 'asset' }); n++;
+    });
+  } else {
+    def[2](ev).sort((a, b) => b.severity - a.severity || b.updated - a.updated).slice(0, 12).forEach(o => {
+      S.sel.add(o.id);
+      if (!S.links.some(l => (l.a === ev.id && l.b === o.id) || (l.a === o.id && l.b === ev.id))) S.links.push({ a: ev.id, b: o.id, label: def[1].split(' ')[0] === '반경' ? Math.round(distKm(ev.lat, ev.lng, o.lat, o.lng)) + 'km' : def[1].split(' ')[1] || def[1], k: kind });
+      n++;
+    });
+  }
+  emit();
+  return n;
+}
+function appendSearchAround(d, ev) {
+  const sec = document.createElement('div'); sec.className = 'sec sa';
+  sec.innerHTML = `<div class="sec-h"><span>검색 확장 · Search Around</span><b>${S.sel.has(ev.id) ? '선택됨' : ''}</b></div>
+    <div class="sa-row">${AROUND.map(([k, label]) => `<button type="button" class="btn" data-k="${k}">${label}</button>`).join('')}</div>
+    <div class="sa-row"><button type="button" class="btn" data-sel="1">${S.sel.has(ev.id) ? '선택에서 빼기' : '선택에 추가'}</button><button type="button" class="btn" data-graph="1">그래프에서 보기</button></div><p class="note sa-out"></p>`;
+  sec.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.sel) { S.sel.has(ev.id) ? S.sel.delete(ev.id) : S.sel.add(ev.id); b.textContent = S.sel.has(ev.id) ? '선택에서 빼기' : '선택에 추가'; emit(); return; }
+    if (b.dataset.graph) { S.sel.add(ev.id); setApp('graph'); return; }
+    const n = searchAround(ev, b.dataset.k);
+    sec.querySelector('.sa-out').textContent = n ? `${n}건을 선택에 더했어요. 그래프와 지구본에 함께 표시돼요.` : '조건에 맞는 항목이 없어요.';
+    clearTimeout(resumeTimer);
+  }));
+  d.append(sec);
+}
+
+// ---- app switcher: map / graph / table ----
+let prePaused = null;
+function setApp(app) {
+  S.app = app;
+  document.querySelectorAll('.apps button').forEach(b => b.setAttribute('aria-pressed', b.dataset.app === app));
+  $('graphApp').hidden = app !== 'graph';
+  $('tableApp').hidden = app !== 'table';
+  $('app').dataset.view = app;
+  // the globe stops flying around while you work in another app, and picks up again on return
+  if (app !== 'map' && prePaused === null) { prePaused = paused; setPaused(true); }
+  if (app === 'map' && prePaused !== null) { setPaused(prePaused); prePaused = null; }
+  if (app === 'graph') renderGraph();
+  if (app === 'table') renderTable();
+}
+
+// ---- graph app (cytoscape) ----
+let cy = null;
+function graphData() {
+  const base = S.sel.size ? [...S.sel].map(id => EV.get(id)).filter(Boolean)
+    : evList('all').slice().sort((a, b) => b.severity - a.severity || b.updated - a.updated).slice(0, 18);
+  const nodes = new Map(), edges = [];
+  const addN = (id, data) => { if (!nodes.has(id)) nodes.set(id, { data: { id, ...data } }); };
+  base.forEach(ev => {
+    const short = ev.type === 'quake' && quakeMag(ev) ? 'M' + quakeMag(ev) + ' ' + ev.place : ev.title;
+    addN(ev.id, { label: short.length > 28 ? short.slice(0, 27) + '…' : short, k: 'ev', color: tcol(ev.type), size: 14 + ev.severity * 4, sel: S.sel.has(ev.id) ? 1 : 0 });
+    const c = evCountry(ev);
+    addN('c:' + c, { label: c, k: 'country', color: '#9fb3c8', size: 16 });
+    edges.push({ data: { id: ev.id + '>c', source: ev.id, target: 'c:' + c, label: '위치', k: 'loc' } });
+    ev.sources.slice(0, 4).forEach(src => {
+      addN('s:' + src, { label: src, k: 'source', color: '#b48cff', size: 11 });
+      edges.push({ data: { id: ev.id + '>s:' + src, source: ev.id, target: 's:' + src, label: '보도', k: 'src' } });
+    });
+  });
+  S.extra.forEach(x => addN(x.id, { label: x.label, k: x.k, color: x.k === 'plant' ? '#c6f05a' : '#46d6e8', size: 13 }));
+  S.links.forEach((l, i) => { if (nodes.has(l.a) && nodes.has(l.b)) edges.push({ data: { id: 'l' + i, source: l.a, target: l.b, label: l.label, k: 'link' } }); });
+  return { nodes: [...nodes.values()], edges, auto: !S.sel.size };
+}
+function renderGraph() {
+  if (typeof cytoscape === 'undefined') return;
+  const { nodes, edges, auto } = graphData();
+  $('graphNote').textContent = auto ? `선택한 사건이 없어서 심각도 높은 사건 ${nodes.filter(n => n.data.k === 'ev').length}건을 보여 줘요. 사건 카드의 "검색 확장"으로 연결을 넓혀 보세요.` : `선택 ${S.sel.size}건 · 노드 ${nodes.length} · 연결 ${edges.length}`;
+  if (!cy) {
+    cy = cytoscape({
+      container: $('cy'), wheelSensitivity: 0.25, minZoom: 0.2, maxZoom: 3,
+      style: [
+        { selector: 'node', style: { 'background-color': 'data(color)', 'background-opacity': 0.25, 'border-color': 'data(color)', 'border-width': 1.5, width: 'data(size)', height: 'data(size)', label: 'data(label)', color: '#d6e2ee', 'font-size': 10, 'font-family': 'IBM Plex Sans KR, sans-serif', 'text-valign': 'bottom', 'text-margin-y': 4, 'text-wrap': 'ellipsis', 'text-max-width': 150, 'text-background-color': '#05080d', 'text-background-opacity': 0.6, 'text-background-padding': 2 } },
+        { selector: 'node[k="country"]', style: { shape: 'round-rectangle', 'background-opacity': 0.12, 'font-weight': 600 } },
+        { selector: 'node[k="source"]', style: { shape: 'diamond', 'font-size': 9, color: '#b8a6e0' } },
+        { selector: 'node[k="plant"], node[k="choke"]', style: { shape: 'triangle' } },
+        { selector: 'node[sel=1]', style: { 'border-width': 3, 'background-opacity': 0.55 } },
+        { selector: 'node:selected', style: { 'border-color': '#ffffff', 'border-width': 3 } },
+        { selector: 'edge', style: { width: 1, 'line-color': '#2c4058', 'curve-style': 'bezier', 'font-size': 8, color: '#7a8ea3', 'text-rotation': 'autorotate', 'text-background-color': '#05080d', 'text-background-opacity': 0.7, 'text-background-padding': 1 } },
+        { selector: 'edge[k="link"]', style: { width: 1.8, 'line-color': '#46d6e8', label: 'data(label)', 'line-style': 'solid' } },
+        { selector: 'edge[k="src"]', style: { 'line-style': 'dashed', 'line-color': '#3a2c5c' } },
+        { selector: '.dim', style: { opacity: 0.18 } }
+      ]
+    });
+    cy.on('tap', 'node', e => {
+      const d = e.target.data();
+      if (d.k === 'ev') { const ev = EV.get(d.id); if (!ev) return; if (e.originalEvent?.shiftKey) return select(d.id, true); S.sel.add(d.id); openEvent(ev, true); emit(); }
+      else if (d.k === 'country') setFilter('country', d.label, true);
+      else if (d.k === 'source') setFilter('source', d.label, true);
+      else { const x = S.extra.get(d.id); if (x) openPlace({ name: x.label, lat: x.lat, lng: x.lng, kind: x.k }); }
+    });
+    cy.on('mouseover', 'node', e => { const n = e.target; cy.elements().addClass('dim'); n.closedNeighborhood().removeClass('dim'); });
+    cy.on('mouseout', 'node', () => cy.elements().removeClass('dim'));
+    cy.on('cxttap', 'node[k="ev"]', e => { const ev = EV.get(e.target.id()); if (ev) { searchAround(ev, 'near'); } });
+  }
+  const keep = new Set([...nodes.map(n => n.data.id), ...edges.map(e => e.data.id)]);
+  cy.batch(() => {
+    cy.elements().filter(el => !keep.has(el.id())).remove();
+    nodes.forEach(n => { const el = cy.getElementById(n.data.id); el.nonempty() ? el.data(n.data) : cy.add({ group: 'nodes', ...n }); });
+    edges.forEach(e => { if (cy.getElementById(e.data.id).empty()) cy.add({ group: 'edges', ...e }); });
+  });
+  cy.resize();
+  cy.layout({ name: 'cose', animate: !reduce, animationDuration: 500, nodeRepulsion: () => 9000, idealEdgeLength: () => 70, padding: 30, randomize: false }).run();
+}
+
+// ---- table app ----
+let tableSort = ['updated', -1];
+function renderTable() {
+  const rows = evList('all').slice();
+  const [k, dir] = tableSort;
+  const val = ev => k === 'type' ? TYPE[ev.type]?.ko : k === 'country' ? evCountry(ev) : k === 'sources' ? ev.sources.length : k === 'signals' ? ev.signals.length : ev[k];
+  rows.sort((a, b) => { const x = val(a), y = val(b); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+  const cols = [['sel', ''], ['type', '유형'], ['severity', '심각도'], ['title', '제목'], ['country', '나라'], ['sources', '출처'], ['signals', '신호'], ['updated', '최근']];
+  $('tableApp').querySelector('thead').innerHTML = '<tr>' + cols.map(([c, l]) => c === 'sel' ? `<th><input type="checkbox" aria-label="모두 선택" id="tAll" ${rows.length && rows.every(r => S.sel.has(r.id)) ? 'checked' : ''}></th>` : `<th><button type="button" data-c="${c}" aria-sort="${k === c ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${l}${k === c ? (dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('') + '</tr>';
+  $('tableApp').querySelector('tbody').innerHTML = rows.slice(0, 400).map(ev => `<tr data-id="${esc(ev.id)}" class="${S.sel.has(ev.id) ? 'on' : ''}"><td><input type="checkbox" aria-label="선택" ${S.sel.has(ev.id) ? 'checked' : ''}></td><td><span class="sb" style="--tc:${tcol(ev.type)}">${esc(TYPE[ev.type]?.ko)}</span></td><td class="pp" style="color:${tcol(ev.type)}">${pips(ev.severity)}</td><td class="tt">${esc(ev.title)}</td><td>${esc(evCountry(ev))}</td><td>${ev.sources.length}</td><td>${ev.signals.length}</td><td>${ago(ev.updated)}</td></tr>`).join('') || '<tr><td colspan="8" class="none">조건에 맞는 사건이 없어요</td></tr>';
+  $('tableNote').textContent = `${rows.length}건${rows.length > 400 ? ' (위 400건만 표시)' : ''} · 제목을 누르면 사건 카드, 체크하면 선택`;
+  $('tableApp').querySelectorAll('thead button').forEach(b => b.addEventListener('click', () => { tableSort = [b.dataset.c, tableSort[0] === b.dataset.c ? -tableSort[1] : -1]; renderTable(); }));
+  $('tAll')?.addEventListener('change', e => { rows.forEach(r => e.target.checked ? S.sel.add(r.id) : S.sel.delete(r.id)); emit(); });
+  $('tableApp').querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.querySelector('input').addEventListener('change', e => { e.target.checked ? S.sel.add(tr.dataset.id) : S.sel.delete(tr.dataset.id); emit(); });
+    tr.querySelector('.tt').addEventListener('click', () => { const ev = EV.get(tr.dataset.id); if (ev) openEvent(ev, true); });
+  });
+}
+
+document.querySelectorAll('.apps button').forEach(b => b.addEventListener('click', () => setApp(b.dataset.app)));
+$('tabFacets').addEventListener('click', () => { selectTab('facets'); renderFacets(); });
+$('graphFit').addEventListener('click', () => cy && cy.fit(undefined, 30));
+$('graphClear').addEventListener('click', clearSelection);
+
+// ================= TYPE SCREENS (지진 · 재난 · 항공 · 뉴스) =================
+// Each screen keeps the globe, narrows the shared filters to its type and docks a
+// panel with widgets made for that kind of data.
+const SCREENS = {
+  quake: { title: '지진 감시', types: ['quake'], color: '#f0b43c' },
+  disaster: { title: '재난 · 태풍 감시', types: ['disaster'], color: '#ff9f43' },
+  air: { title: '항공 감시', types: null, color: '#f4f8ff' },
+  news: { title: '뉴스 · 분쟁 감시', types: ['conflict', 'news', 'accident'], color: '#b48cff' }
+};
+S.screen = null;
+let airTimer = null, airData = null, airCentre = null, stormPaths = [];
+
+function setScreen(name) {
+  if (S.screen === name) name = null;
+  S.screen = name;
+  document.querySelectorAll('.screens button').forEach(b => b.setAttribute('aria-pressed', b.dataset.screen === name));
+  S.filters.type.clear();
+  const sc = SCREENS[name];
+  if (sc && sc.types) sc.types.forEach(t => S.filters.type.add(t));
+  clearInterval(airTimer); airTimer = null;
+  if (name === 'air') { if (!layers.aircraft) toggleLayer('aircraft'); loadAirArea(); airTimer = setInterval(loadAirArea, 20000); }
+  else if (airData) { airData = null; acPoints = []; }
+  stormPaths = [];
+  if (S.app !== 'map') setApp('map');
+  $('app').dataset.screen = name || '';
+  $('typePanel').hidden = !name;
+  if (name) { setPaused(true); if (busy) { clearTimeout(resumeTimer); resume(); } }
+  emit();
+  renderScreen();
+}
+
+function renderScreen() {
+  const box = $('typePanel');
+  if (!S.screen) { box.hidden = true; world.pathsData(busy ? world.pathsData() : []); return; }
+  const sc = SCREENS[S.screen];
+  box.style.setProperty('--tc', sc.color);
+  const body = S.screen === 'quake' ? quakeScreen() : S.screen === 'disaster' ? disasterScreen() : S.screen === 'air' ? airScreen() : newsScreen();
+  box.innerHTML = `<div class="tp-h"><span class="tp-t">${sc.title}</span><button type="button" class="close" aria-label="전용 화면 닫기">×</button></div>${body}`;
+  box.querySelector('.close').addEventListener('click', () => setScreen(null));
+  box.querySelectorAll('[data-ev]').forEach(n => n.addEventListener('click', () => { const ev = EV.get(n.dataset.ev); if (ev) openEvent(ev, true); }));
+  box.querySelectorAll('[data-ac]').forEach(n => n.addEventListener('click', () => { const a = acPoints[+n.dataset.ac]; if (a) world.pointOfView({ lat: a.lat, lng: a.lng, altitude: 0.35 }, T(1200)); }));
+  $('airReload')?.addEventListener('click', () => loadAirArea(true));
+  if (S.screen !== 'disaster' && !busy) world.pathsData([]);
+}
+
+const kpi = list => `<div class="kpis">${list.map(([v, l, c]) => `<div><b${c ? ` style="color:${c}"` : ''}>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+const bars = (rows, color) => { const max = Math.max(1, ...rows.map(r => r[1])); return `<div class="hbars">${rows.map(([l, n, c, ev]) => `<div class="hb"${ev ? ` data-ev="${esc(ev)}" role="button" tabindex="0"` : ''}><span class="l">${esc(l)}</span><span class="b"><i style="width:${Math.round(n / max * 100)}%;background:${c || color}"></i></span><span class="n">${n}</span></div>`).join('')}</div>`; };
+const anchorData = ev => { const a = anchorOf(ev); return a && a.data ? a.data : null; };
+
+// ---- 지진 ----
+function quakeScreen() {
+  const evs = evList('all').filter(ev => ev.type === 'quake' || ev.type === 'tsunami');
+  const qs = evs.map(ev => ({ ev, q: anchorData(ev) })).filter(x => x.q && isFinite(x.q.mag));
+  const end = viewRange ? viewRange[1] : Date.now(), start = end - 7 * 864e5;
+  const day = qs.filter(x => +x.q.time > end - 864e5);
+  const max = qs.reduce((m, x) => Math.max(m, x.q.mag), 0);
+  const eew = extra.filter(x => x.type === 'eew' && !x.demo && x.time > end - 864e5).length;
+  const tsu = extra.filter(x => x.type === 'tsunami' && !x.cancelled && x.time > end - 864e5).length;
+  // magnitude vs time scatter
+  const W = 318, H = 150, P = 22;
+  const y = m => H - P - (Math.min(8, Math.max(4.5, m)) - 4.5) / 3.5 * (H - P - 8);
+  const x = t => P + (t - start) / (end - start) * (W - P - 6);
+  let svg = `<svg class="scatter" viewBox="0 0 ${W} ${H}" role="img" aria-label="규모-시간 분포">`;
+  [5, 6, 7].forEach(m => { svg += `<line x1="${P}" x2="${W - 6}" y1="${y(m)}" y2="${y(m)}" class="gl"/><text x="2" y="${y(m) + 3}" class="ax">M${m}</text>`; });
+  [6, 4, 2, 0].forEach(d => { const t = end - d * 864e5; svg += `<text x="${x(t)}" y="${H - 6}" class="ax" text-anchor="middle">${d ? d + '일 전' : '지금'}</text>`; });
+  qs.forEach(({ ev, q }) => { const c = q.maxScale ? shByLabel(q.maxScale)[2] : ({ crit: '#ff4d3d', high: '#f0b43c', low: '#9fd3ff' })[lvl(ev)]; svg += `<circle cx="${x(+q.time)}" cy="${y(q.mag)}" r="${2 + (q.mag - 4.5) * 2}" fill="${rgba(c.startsWith('#') ? c : '#9fd3ff', .35)}" stroke="${c}" data-ev="${esc(ev.id)}"><title>M${q.mag.toFixed(1)} · ${esc(ev.place)}</title></circle>`; });
+  svg += '</svg>';
+  const depth = [['얕음 0–70km', qs.filter(x => x.q.depth < 70).length, '#ff7a3c'], ['중간 70–300km', qs.filter(x => x.q.depth >= 70 && x.q.depth < 300).length, '#f0b43c'], ['깊음 300km+', qs.filter(x => x.q.depth >= 300).length, '#7cc0ff']];
+  const top = qs.slice().sort((a, b) => b.q.mag - a.q.mag).slice(0, 8);
+  const jma = qs.filter(x => x.ev.signals.some(s => s.kind === 'jma')).sort((a, b) => +b.q.time - +a.q.time)[0];
+  return kpi([[qs.length, '7일 지진'], [day.length, '24시간'], [max ? 'M' + max.toFixed(1) : '-', '최대 규모', max >= 6.3 ? 'var(--crit)' : ''], [eew + tsu, '속보·쓰나미', eew + tsu ? 'var(--crit)' : '']]) +
+    `<div class="sec"><div class="sec-h"><span>규모 · 시간 분포</span><b>점 = 지진</b></div>${svg}</div>` +
+    `<div class="sec"><div class="sec-h"><span>깊이</span></div>${bars(depth)}</div>` +
+    (jma ? `<div class="sec"><div class="sec-h"><span>일본 기상청 최근 발표</span><b>${ago(+jma.q.time)}</b></div><div class="tp-row" data-ev="${esc(jma.ev.id)}" role="button" tabindex="0">${jma.q.maxScale ? shBadge(shByLabel(jma.q.maxScale)) : ''} M${jma.q.mag.toFixed(1)} · ${esc(jma.ev.place)}</div></div>` : '') +
+    `<div class="sec"><div class="sec-h"><span>큰 지진 순</span></div><table class="tbl"><tbody>${top.map(({ ev, q }) => `<tr class="go" data-ev="${esc(ev.id)}"><td>M${q.mag.toFixed(1)} ${esc(ev.place)}</td><td class="st">${Math.round(q.depth)}km</td><td class="st">${ago(+q.time)}</td></tr>`).join('') || '<tr><td class="none">지진이 없어요</td></tr>'}</tbody></table></div>`;
+}
+
+// ---- 재난 · 태풍 ----
+const CAT_COLOR = { severeStorms: '#46d6e8', wildfires: '#ff7a3c', volcanoes: '#ff4d3d', floods: '#5b9bff', drought: '#c9a26b', landslides: '#b08968', dustHaze: '#c2b280', snow: '#e6f0ff', tempExtremes: '#ff9f43', manmade: '#9fb3c8' };
+function disasterScreen() {
+  const evs = evList('all').filter(ev => ev.type === 'disaster');
+  const withCat = evs.map(ev => { const e = ev.signals.find(s => s.kind === 'eonet'); return { ev, d: e?.data || null }; });
+  const cats = {};
+  withCat.forEach(({ d }) => { const k = d ? d.cat : 'news'; cats[k] = (cats[k] || 0) + 1; });
+  const catRows = Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k === 'news' ? '보도로만 잡힘' : (withCat.find(x => x.d?.cat === k)?.d.catKo || k), n, CAT_COLOR[k] || '#b48cff']);
+  const storms = withCat.filter(x => x.d && x.d.cat === 'severeStorms');
+  // draw storm tracks on the globe
+  stormPaths = storms.filter(x => x.d.track && x.d.track.length > 1).map(x => ({ pts: x.d.track.map(p => [p[0], p[1], 0.006]), c: 'rgba(70,214,232,0.75)', w: 0.5 }));
+  if (!busy) world.pathsData(stormPaths);
+  const reported = evs.filter(ev => ev.signals.some(s => s.kind === 'news')).sort((a, b) => b.signals.length - a.signals.length).slice(0, 6);
+  return kpi([[evs.length, '진행 중 재난'], [storms.length, '폭풍·태풍', storms.length ? '#46d6e8' : ''], [cats.wildfires || 0, '산불'], [cats.volcanoes || 0, '화산']]) +
+    `<div class="sec"><div class="sec-h"><span>종류</span><b>NASA EONET + 보도</b></div>${bars(catRows)}</div>` +
+    `<div class="sec"><div class="sec-h t"><span>폭풍 · 태풍</span><b>${storms.length}</b></div><table class="tbl"><tbody>${storms.map(({ ev, d }) => `<tr class="go" data-ev="${esc(ev.id)}"><td>${esc(d.title)}</td><td class="st">${esc(d.mag || '')}</td><td class="st">${ago(d.time)}</td></tr>`).join('') || '<tr><td class="none">지금 추적 중인 폭풍이 없어요</td></tr>'}</tbody></table>${stormPaths.length ? '<p class="note">지구본의 하늘색 선이 지나온 경로예요.</p>' : ''}</div>` +
+    `<div class="sec"><div class="sec-h"><span>보도가 많은 재난</span></div><table class="tbl"><tbody>${reported.map(ev => `<tr class="go" data-ev="${esc(ev.id)}"><td>${esc(ev.title)}</td><td class="st">기사 ${ev.signals.filter(s => s.kind === 'news').length}</td></tr>`).join('') || '<tr><td class="none">관련 보도가 아직 없어요</td></tr>'}</tbody></table></div>`;
+}
+
+// ---- 항공 ----
+async function loadAirArea(force) {
+  const pov = world.pointOfView();
+  const c = { lat: +pov.lat.toFixed(2), lng: +(((pov.lng + 540) % 360) - 180).toFixed(2) };
+  if (!force && airCentre && distKm(c.lat, c.lng, airCentre.lat, airCentre.lng) < 50 && airData && Date.now() - airData.t < 18000) return;
+  airCentre = c;
+  try {
+    const j = await (await fetch(`api/aircraft?lat=${c.lat}&lng=${c.lng}`)).json();
+    if (S.screen !== 'air') return;
+    airData = { ...j, t: Date.now() };
+    acPoints = (j.ac || []).map(a => ({ ...a, type: 'ac', type2: a.type }));
+    applyLayers();
+  } catch { airData = { error: '서버에 연결하지 못했어요', ac: [], t: Date.now() }; }
+  renderScreen();
+}
+function airScreen() {
+  if (!airData) return `<p class="note">지구본 가운데를 중심으로 반경 약 460km의 항공기를 불러오는 중이에요…</p>`;
+  if (airData.demo) return `<p class="note">데모 모드에서는 항공기 데이터를 받지 않아요.</p>`;
+  if (airData.error && !acPoints.length) return `<p class="note">${esc(airData.error)}</p><button type="button" class="btn" id="airReload">다시 불러오기</button>`;
+  const air = acPoints.filter(a => !a.ground), gnd = acPoints.length - air.length;
+  const emer = acPoints.filter(a => a.emergency || ['7500', '7600', '7700'].includes(String(a.squawk)));
+  const SQ = { '7500': '불법 점거', '7600': '통신 두절', '7700': '비상' };
+  const bins = [['지상', gnd], ['~10,000ft', air.filter(a => a.alt < 10000).length], ['10–25,000', air.filter(a => a.alt >= 10000 && a.alt < 25000).length], ['25–35,000', air.filter(a => a.alt >= 25000 && a.alt < 35000).length], ['35,000+', air.filter(a => a.alt >= 35000).length]];
+  const types = {};
+  acPoints.forEach(a => { if (a.type2) types[a.type2] = (types[a.type2] || 0) + 1; });
+  const topTypes = Object.entries(types).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const near = acPoints.map((a, i) => ({ a, i, d: distKm(airCentre.lat, airCentre.lng, a.lat, a.lng) })).filter(x => !x.a.ground).sort((x, y) => x.d - y.d).slice(0, 10);
+  return kpi([[air.length, '비행 중'], [gnd, '지상'], [air.length ? Math.round(air.reduce((s, a) => s + a.alt, 0) / air.length / 100) * 100 : '-', '평균 고도 ft'], [emer.length, '비상 신호', emer.length ? 'var(--crit)' : '']]) +
+    `<p class="note">중심 ${airCentre.lat.toFixed(1)}, ${airCentre.lng.toFixed(1)} · ${esc(airData.source || '')} · ${ago(airData.t)} 갱신 · 지구본을 돌린 뒤 <button type="button" class="linkbtn" id="airReload">여기서 다시 찾기</button></p>` +
+    (emer.length ? `<div class="sec"><div class="sec-h" style="color:var(--crit)"><span>비상 스쿼크</span><b>${emer.length}</b></div><table class="tbl"><tbody>${emer.map(a => `<tr class="go" data-ac="${acPoints.indexOf(a)}"><td>${esc(a.flight)} <span class="st">${esc(a.type2 || '')}</span></td><td class="st hit">${esc(a.squawk || '')} ${SQ[a.squawk] || esc(a.emergency || '')}</td></tr>`).join('')}</tbody></table></div>` : '') +
+    `<div class="sec"><div class="sec-h"><span>고도 분포</span></div>${bars(bins, '#f4f8ff')}</div>` +
+    `<div class="sec"><div class="sec-h"><span>기종 상위</span></div>${bars(topTypes, '#9fb3c8')}</div>` +
+    `<div class="sec"><div class="sec-h"><span>중심에서 가까운 비행</span></div><table class="tbl"><tbody>${near.map(({ a, i, d }) => `<tr class="go" data-ac="${i}"><td>${esc(a.flight)} <span class="st">${esc(a.type2 || '')}</span></td><td class="st">${Math.round(a.alt).toLocaleString()}ft</td><td class="st">${Math.round(d)}km</td></tr>`).join('') || '<tr><td class="none">비행 중인 항공기가 없어요</td></tr>'}</tbody></table></div>`;
+}
+
+// ---- 뉴스 · 분쟁 ----
+function newsScreen() {
+  const evs = evList('all').filter(ev => ['conflict', 'news', 'accident'].includes(ev.type));
+  const end = viewRange ? viewRange[1] : Date.now();
+  const arts = [];
+  evs.forEach(ev => ev.signals.forEach(s => { if (s.kind === 'news') arts.push({ s, ev }); }));
+  arts.sort((a, b) => b.s.time - a.s.time);
+  const day = arts.filter(x => x.s.time > end - 864e5);
+  const outlets = new Set(day.map(x => x.s.src));
+  const flash = day.filter(x => x.s.flash).length;
+  // articles per hour, last 24h
+  const hrs = Array.from({ length: 24 }, (_, i) => day.filter(x => x.s.time > end - (24 - i) * 3600e3 && x.s.time <= end - (23 - i) * 3600e3).length);
+  const hm = Math.max(1, ...hrs);
+  const hist = `<div class="hist">${hrs.map((n, i) => `<i style="height:${Math.round(n / hm * 100)}%" title="${23 - i}시간 전 · ${n}건"></i>`).join('')}</div><div class="hist-ax"><span>24시간 전</span><span>지금</span></div>`;
+  const byPlace = {};
+  evs.forEach(ev => { byPlace[ev.place] = byPlace[ev.place] || { n: 0, ev, c: tcol(ev.type) }; byPlace[ev.place].n += ev.signals.filter(s => s.kind === 'news').length; });
+  const places = Object.entries(byPlace).sort((a, b) => b[1].n - a[1].n).slice(0, 7).map(([p, v]) => [p, v.n, v.c, v.ev.id]);
+  const bySrc = {};
+  day.forEach(x => { bySrc[x.s.src] = (bySrc[x.s.src] || 0) + 1; });
+  const srcs = Object.entries(bySrc).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  return kpi([[day.length, '24시간 기사'], [evs.length, '사건'], [outlets.size, '언론사'], [flash, '속보', flash ? 'var(--crit)' : '']]) +
+    `<div class="sec"><div class="sec-h"><span>시간대별 기사</span></div>${hist}</div>` +
+    `<div class="sec"><div class="sec-h"><span>많이 보도된 곳</span></div>${bars(places)}</div>` +
+    `<div class="sec"><div class="sec-h"><span>언론사</span></div>${bars(srcs, '#b48cff')}</div>` +
+    `<div class="sec"><div class="sec-h"><span>최신 헤드라인</span></div><table class="tbl sig"><tbody>${arts.slice(0, 20).map(({ s, ev }) => `<tr class="go" data-ev="${esc(ev.id)}"><td><span class="sb" style="--tc:${tcol(ev.type)}">${esc(TYPE[ev.type]?.ko)}</span>${s.flash ? '<b style="color:var(--crit)">속보 </b>' : ''}${esc(s.title)}<br><span class="st">${esc(s.src)} · ${esc(ev.place)}</span></td><td class="st">${ago(s.time)}</td></tr>`).join('') || '<tr><td class="none">아직 기사가 없어요</td></tr>'}</tbody></table></div>`;
+}
+document.querySelectorAll('.screens button').forEach(b => b.addEventListener('click', () => setScreen(b.dataset.screen)));
+
+
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
 function addQuake(q, live) {
@@ -1626,6 +2208,12 @@ addEventListener('keydown', k => {
   else if (k.key === 'j' || k.key === 'J') fireMissile();
   else if (k.key === 'e' || k.key === 'E') $('eewTest').click();
   else if (k.key === 'Escape' && busy) { clearTimeout(resumeTimer); resume(); }
+  else if (k.key === 'Escape' && S.app !== 'map') setApp('map');
+  else if (k.key === 'Escape' && S.screen) setScreen(null);
+  else if (k.shiftKey && /^Digit[1-4]$/.test(k.code)) setScreen(['quake', 'disaster', 'air', 'news'][+k.code.slice(5) - 1]);
+  else if (k.key === 'm' || k.key === 'M') setApp('map');
+  else if (k.key === 'g' || k.key === 'G') setApp('graph');
+  else if (k.key === 't' || k.key === 'T') setApp('table');
   else if (k.key >= '1' && k.key <= '9') toggleLayer(LAYER_DEFS[+k.key - 1][0]);
   else if (k.key === '/') { k.preventDefault(); $('q').focus(); }
 });

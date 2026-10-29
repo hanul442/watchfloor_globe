@@ -42,10 +42,12 @@ export function parseEONET(j) {
     if (!g) continue;
     const c = centroid(g);
     if (!c || !isFinite(c[0]) || !isFinite(c[1])) continue;
+    // storm tracks: keep the recent path of point positions
+    const track = cat === 'severeStorms' ? (ev.geometry || []).filter(x => x.type === 'Point').slice(-80).map(x => [x.coordinates[1], x.coordinates[0], Date.parse(x.date) || 0, x.magnitudeValue ?? null]) : null;
     const mag = g.magnitudeValue != null ? `${g.magnitudeValue} ${g.magnitudeUnit || ''}`.trim() : null;
     out.push({
       id: 'h-' + ev.id, type: 'hazard', cat, catKo: HAZARD_CATS[cat], title: ev.title,
-      lat: c[0], lng: c[1], time: Date.parse(g.date) || Date.now(), mag,
+      lat: c[0], lng: c[1], time: Date.parse(g.date) || Date.now(), mag, track,
       link: ev.sources?.[0]?.url || `https://eonet.gsfc.nasa.gov/api/v3/events/${ev.id}`
     });
   }
