@@ -595,7 +595,7 @@ button { font-family: inherit; }
     <div class="av-f">노드를 끌어 놓으면 "직접 배치"로 바뀌고 그 자리가 조사에 저장돼요 · 사건 노드를 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 나라나 출처 노드를 누르면 그걸로 좁혀요 · 사건에서 오른쪽 클릭은 반경 300km 확장</div>
   </section>
   <section class="appview" id="flatApp" hidden aria-label="평면 지도">
-    <div class="av-h"><span class="av-t">평면 지도</span><span class="av-n" id="flatNote"></span><button type="button" class="btn" id="flatLasso" aria-pressed="false">영역 선택</button><button type="button" class="btn" id="flatHeat" aria-pressed="false">히트맵</button><button type="button" class="btn" id="flatZoomIn" aria-label="확대">+</button><button type="button" class="btn" id="flatZoomOut" aria-label="축소">−</button><button type="button" class="btn" id="flatFit">전체</button><button type="button" class="btn" id="flatClear">선택 지우기</button></div>
+    <div class="av-h"><span class="av-t">평면 지도</span><span class="av-n" id="flatNote"></span><button type="button" class="btn" id="flatLasso" aria-pressed="false">영역 선택</button><button type="button" class="btn" id="flatZone" aria-pressed="false">감시 구역</button><button type="button" class="btn" id="flatHeat" aria-pressed="false">히트맵</button><button type="button" class="btn" id="flatZoomIn" aria-label="확대">+</button><button type="button" class="btn" id="flatZoomOut" aria-label="축소">−</button><button type="button" class="btn" id="flatFit">전체</button><button type="button" class="btn" id="flatClear">선택 지우기</button></div>
     <div class="flat-wrap"><canvas id="flatCv" aria-label="사건 평면 지도"></canvas><div class="flat-tip" id="flatTip" hidden></div></div>
     <div class="av-f">끌어서 이동 · 휠로 확대 · 점을 누르면 카드가 열려요 · Shift+클릭은 선택 추가 · 태풍 경로는 아래 ▶ 재생을 따라 움직여요</div>
   </section>
@@ -1767,6 +1767,7 @@ async function loadShips() {
     shipPts = [...demo, ...(j.ships || []).map(s => ({ ...s, type: 'ship' }))];
     shipBoxes = j.boxes || shipBoxes;
     applyLayers();
+    zoneTick();
     if (S.screen === 'sea') renderScreen();
   } catch {}
 }
@@ -2305,6 +2306,7 @@ async function loadAirArea(force) {
     airData = { ...j, t: Date.now() };
     acPoints = (j.ac || []).map(a => ({ ...a, type: 'ac', type2: a.type }));
     applyLayers();
+    zoneTick();
   } catch { airData = { error: '서버에 연결하지 못했어요', ac: [], t: Date.now() }; }
   renderScreen();
 }
@@ -2553,6 +2555,7 @@ function renderInv() {
     <p class="note">CSV(위도·경도 열), GeoJSON, KML의 위치를 내 객체로 가져와요. 공개된 장소와 시설만 다루고, 사람의 위치 기록은 가져오지 마세요.</p>
     <ul class="wk-links">${[...new Set([...S.extra.values()].filter(x => x.src).map(x => x.src))].map(src => `<li><span>${esc(src)} · ${[...S.extra.values()].filter(x => x.src === src).length}개</span><button type="button" class="inv-del imp-rm" data-src="${esc(src)}">지우기</button></li>`).join('')}</ul>
     <div class="inv-act"><button type="button" class="btn" id="impBtn">CSV · GeoJSON · KML 가져오기</button><input type="file" id="impIn" accept=".csv,.tsv,.geojson,.json,.kml" hidden></div>
+    <div id="zoneBox"></div>
     <div id="alBox"></div>
     <details class="inv-log"><summary class="fx-t">이 브라우저의 작업 기록</summary><ul>${actList().slice(0, 40).map(a => `<li><span class="st">${fmt(a.t, 'Asia/Seoul')}</span> ${esc(a.what)}${a.name ? ' · ' + esc(a.name) : ''}</li>`).join('') || '<li class="st">아직 기록이 없어요</li>'}</ul></details>
     <p class="note">조사는 이 브라우저에만 저장돼요. 다른 기기나 사람에게는 링크나 파일로 넘겨 주세요.</p>`;
@@ -2565,7 +2568,7 @@ function renderInv() {
   $('impIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) importFile(f); });
   box.querySelectorAll('.imp-rm').forEach(b => b.addEventListener('click', () => { if (confirm(`${b.dataset.src}에서 가져온 객체를 모두 지울까요?`)) removeImported(b.dataset.src); }));
   $('objAdd').addEventListener('click', () => { if (S.app !== 'map') setApp('map'); startPick(); });
-  renderAlerts();
+  renderAlerts(); renderZones();
   $('invImport').addEventListener('click', () => $('invFileIn').click());
   $('invFileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) invImportFile(f); });
   $('invNote').addEventListener('input', e => { S.invNote = e.target.value; });
@@ -3051,7 +3054,7 @@ function removeImported(src) {
 function renderInvSoon() { const m = $('invMsg')?.textContent, bad = $('invMsg')?.classList.contains('bad'); renderInv(); if (m) invMsg(m, bad); }
 // outlines of imported lines and areas, plus storm tracks on the disaster screen
 function objShapes() { return [...S.extra.values()].filter(x => x.shape).map(x => ({ pts: x.shape.map(p => [p[0], p[1], 0.005]), c: rgba((OBJ_TYPES[x.ot] || OBJ_TYPES.place)[1], 0.8), w: 0.35 })); }
-function restorePaths() { if (!busy) world.pathsData([...(S.screen === 'disaster' ? stormPaths : []), ...objShapes()]); }
+function restorePaths() { if (!busy) world.pathsData([...(S.screen === 'disaster' ? stormPaths : []), ...objShapes(), ...zonePaths()]); }
 
 // ================= 2D MAP (평면 지도) =================
 // Flat equirectangular map drawn on a canvas from the same countries file. Same data
@@ -3113,6 +3116,14 @@ function drawFlat() {
     g.strokeStyle = l.c; g.lineWidth = l.w; g.stroke();
     if (l.head) { g.beginPath(); g.arc(fx2(l.head[1], W, o), fy2(l.head[0], H), 5, 0, 7); g.fillStyle = 'rgba(70,214,232,.35)'; g.fill(); g.strokeStyle = '#46d6e8'; g.stroke(); }
   }));
+  // watch zones
+  zoneAll().forEach(z => offs.forEach(o => {
+    g.beginPath(); z.pts.forEach((p, i) => { const x = fx2(p[1], W, o), y = fy2(p[0], H); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath();
+    g.fillStyle = z.on ? 'rgba(240,180,60,.07)' : 'rgba(240,180,60,.02)'; g.fill();
+    g.setLineDash([6, 4]); g.strokeStyle = z.on ? 'rgba(240,180,60,.9)' : 'rgba(240,180,60,.35)'; g.lineWidth = 1.4; g.stroke(); g.setLineDash([]);
+    const top = z.pts.reduce((a, p) => p[0] > a[0] ? p : a, z.pts[0]);
+    g.font = '600 11px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#f0b43c'; g.fillText(z.name, fx2(top[1], W, o) + 4, fy2(top[0], H) - 6);
+  }));
   // links
   S.links.forEach(lk => {
     const a = nodeOf(lk.a), b = nodeOf(lk.b); if (!a || !b || !isFinite(a.lat) || !isFinite(b.lat) || a.mergedInto || b.mergedInto) return;
@@ -3138,7 +3149,7 @@ function drawFlat() {
   }));
   // lasso in progress
   if (FL.path && FL.path.length > 1) { g.beginPath(); FL.path.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fillStyle = 'rgba(240,180,60,.08)'; g.fill(); g.setLineDash([5, 4]); g.strokeStyle = '#f0b43c'; g.lineWidth = 1.2; g.stroke(); g.setLineDash([]); }
-  $('flatNote').textContent = `사건 ${evs.length}건${any ? ` · 선택 ${S.sel.size}건` : ''}${viewRange ? ' · ' + fmt(tEnd, 'Asia/Seoul') + ' KST까지' : ''}${FL.lasso ? ' · 끌어서 영역을 그리면 그 안의 사건을 골라요 (Shift: 더하기)' : ''}`;
+  $('flatNote').textContent = `사건 ${evs.length}건${any ? ` · 선택 ${S.sel.size}건` : ''}${viewRange ? ' · ' + fmt(tEnd, 'Asia/Seoul') + ' KST까지' : ''}${FL.lasso ? ' · 끌어서 영역을 그리면 그 안의 사건을 골라요 (Shift: 더하기)' : ''}${zoneDraw ? ' · 끌어서 감시할 구역을 그리세요 (Esc: 취소)' : ''}`;
 }
 function drawHeat(g, evs, W, H, offs) {
   const s = 4, w = Math.ceil(W / s), h = Math.ceil(H / s);
@@ -3182,7 +3193,7 @@ function setupFlat() {
   c.addEventListener('pointerdown', e => {
     c.setPointerCapture(e.pointerId);
     const [x, y] = pos(e);
-    if (FL.lasso) { FL.path = [[x, y]]; FL.add = e.shiftKey; return; }
+    if (FL.lasso || zoneDraw) { FL.path = [[x, y]]; FL.add = e.shiftKey; return; }
     FL.drag = { x, y, lng: FL.lng, lat: FL.lat, moved: false };
   });
   c.addEventListener('pointermove', e => {
@@ -3199,12 +3210,18 @@ function setupFlat() {
       tip.hidden = false; tip.style.left = Math.min(x + 14, c.clientWidth - 260) + 'px'; tip.style.top = (y + 14) + 'px';
       tip.innerHTML = h.ev ? `<b style="color:${tcol(h.ev.type)}">${esc(TYPE[h.ev.type]?.ko || '')}</b> · ${pips(h.ev.severity)} · 출처 ${h.ev.sources.length}<br>${esc(h.ev.title)}<br><span class="st">${esc(h.ev.place)} · ${ago(h.ev.updated)}</span>` : `내 객체 · ${esc((OBJ_TYPES[h.obj.ot] || OBJ_TYPES.place)[0])}<br>${esc(h.obj.label)}`;
       c.style.cursor = 'pointer';
-    } else { tip.hidden = true; c.style.cursor = FL.lasso ? 'crosshair' : 'grab'; }
+    } else { tip.hidden = true; c.style.cursor = FL.lasso || zoneDraw ? 'crosshair' : 'grab'; }
   });
   c.addEventListener('pointerup', e => {
     const [x, y] = pos(e);
     if (FL.path) {
       const poly = FL.path; FL.path = null;
+      if (zoneDraw) {
+        const { W, H } = flatSize();
+        if (poly.length > 4) { const pts = poly.map(([px, py]) => [FL.lat - (py - H / 2) / FL.k, ((FL.lng + (px - W / 2) / FL.k + 540) % 360) - 180]); stopZoneDraw(); zoneCreate(pts); }
+        else drawFlatSoon();
+        return;
+      }
       if (poly.length > 2) {
         if (!FL.add) S.sel.clear();
         const hit = new Set(FL.pts.filter(p => p.ev && inPoly(p.x, p.y, poly)).map(p => p.ev.id));
@@ -3233,7 +3250,8 @@ function setupFlat() {
   $('flatZoomIn').addEventListener('click', () => { FL.k = Math.min(400, FL.k * 1.5); drawFlat(); });
   $('flatZoomOut').addEventListener('click', () => { const { W } = flatSize(); FL.k = Math.max(W / 400, FL.k / 1.5); drawFlat(); });
   $('flatFit').addEventListener('click', flatFit);
-  $('flatLasso').addEventListener('click', e => { FL.lasso = !FL.lasso; e.currentTarget.setAttribute('aria-pressed', FL.lasso); c.style.cursor = FL.lasso ? 'crosshair' : 'grab'; drawFlat(); });
+  $('flatLasso').addEventListener('click', e => { if (zoneDraw) stopZoneDraw(); FL.lasso = !FL.lasso; e.currentTarget.setAttribute('aria-pressed', FL.lasso); c.style.cursor = FL.lasso ? 'crosshair' : 'grab'; drawFlat(); });
+  $('flatZone').addEventListener('click', () => zoneDraw ? stopZoneDraw() : startZoneDraw());
   $('flatHeat').addEventListener('click', e => { FL.heat = !FL.heat; e.currentTarget.setAttribute('aria-pressed', FL.heat); drawFlat(); });
   $('flatClear').addEventListener('click', () => clearSelection());
   addEventListener('resize', drawFlatSoon);
@@ -3283,7 +3301,7 @@ function shipFocus(s) {
   if (s.dark) showBanner(`● 선박 신호 끊김 · ${s.name || 'MMSI ' + s.mmsi} · ${r.min}분째`, 'ship');
   setTimeout(() => {
     if (currentId !== 'ship-' + s.mmsi) return;
-    world.pathsData(shipPaths(s));
+    world.pathsData([...shipPaths(s), ...zonePaths()]);
     world.ringsData([{ lat: s.lat, lng: s.lng, max: 2.5, color: rgba(s.dark ? '#ff5c5c' : '#5ee0b0', 'A') }]);
   }, T(1150));
   dossierTimer = setTimeout(() => showShipCard(s), T(1600));
@@ -3322,6 +3340,7 @@ function onShipEvent(s) {
   if (layers.ships) applyLayers();
   if (S.screen === 'sea') renderScreen();
   if (s.dark && !prev.dark) shipToast(next);
+  zoneTick();
 }
 function shipToast(s) {
   beep('hit');
@@ -3362,6 +3381,139 @@ function seaDarkList() {
   return `<div class="sec"><div class="sec-h" style="color:var(--crit)"><span>신호 끊긴 배</span><b>${dark.length}</b></div><table class="tbl"><tbody>${dark.slice(0, 12).map(s => `<tr class="go" data-ship="${s.mmsi}"><td>${esc(s.name || s.mmsi)} <span class="st">${SHIP_TYPE(s.shipType)}${s.boxName ? ' · ' + esc(s.boxName) : ''}</span></td><td class="st hit">${silentMin(s)}분째</td><td class="st">~${shipReach(s).km}km</td></tr>`).join('') || '<tr><td class="none">지금 신호가 끊긴 배는 없어요</td></tr>'}</tbody></table></div>`;
 }
 
+// ================= WATCH ZONES =================
+// Areas the analyst draws on the 2D map. When a ship, an aircraft or a new event
+// enters one, a toast fires. A ship that goes dark inside a zone, or whose course
+// leads into one, gets its own alert with an arrival estimate. Saved in this browser.
+const ZONE_KEY = 'wf.zones.v1';
+const zoneAll = () => { try { return JSON.parse(localStorage.getItem(ZONE_KEY) || '[]'); } catch { return []; } };
+const zoneWrite = l => { try { localStorage.setItem(ZONE_KEY, JSON.stringify(l)); } catch {} };
+const zoneIn = (z, lat, lng) => isFinite(lat) && isFinite(lng) && inPoly(lng, lat, z.pts.map(p => [p[1], p[0]]));
+const zoneSeen = new Map();   // zone id -> { ship:Set, ac:Set, ev:Set, dark:Set, eta:Set, ready:{} }
+let zoneDraw = false;
+function zoneState(id) { let s = zoneSeen.get(id); if (!s) { s = { ship: new Set(), ac: new Set(), ev: new Set(), dark: new Set(), eta: new Set(), ready: {} }; zoneSeen.set(id, s); } return s; }
+function zoneCreate(pts) {
+  // keep at most 60 corners
+  const step = Math.ceil(pts.length / 60), p = pts.filter((_, i) => i % step === 0).map(q => [+q[0].toFixed(4), +q[1].toFixed(4)]);
+  if (p.length < 3) return;
+  const l = zoneAll();
+  const name = (prompt('감시 구역 이름', `감시 구역 ${l.length + 1}`) || '').trim().slice(0, 40) || `감시 구역 ${l.length + 1}`;
+  const z = { id: 'z' + Date.now().toString(36), name, pts: p, on: true, created: Date.now() };
+  l.push(z); zoneWrite(l);
+  logAct('감시 구역 만들기', name);
+  zoneTick(); renderZones(); restorePaths(); drawFlatSoon();
+  zoneToastRaw('감시 구역 저장', name, '배·항공기·새 사건이 들어오면 알려 드려요', null);
+}
+function zoneDelete(id) {
+  const l = zoneAll(), z = l.find(x => x.id === id); if (!z || !confirm(`감시 구역 "${z.name}"을(를) 지울까요?`)) return;
+  zoneWrite(l.filter(x => x.id !== id)); zoneSeen.delete(id);
+  logAct('감시 구역 삭제', z.name); renderZones(); restorePaths(); drawFlatSoon();
+}
+function zoneToastRaw(head, title, sub, onClick) {
+  const n = document.createElement('button');
+  n.type = 'button'; n.className = 'al-toast zone';
+  n.innerHTML = `<span class="fx-t">${esc(head)}</span><b>${esc(title)}</b>${sub ? `<span class="st">${esc(sub)}</span>` : ''}`;
+  n.addEventListener('click', () => { n.remove(); onClick && onClick(); });
+  $('alToasts').append(n);
+  setTimeout(() => n.remove(), 20000);
+}
+function zoneAlert(z, head, title, sub, onClick) {
+  beep('hit');
+  zoneToastRaw(`${head} · ${z.name}`, title, sub, onClick);
+  const l = zoneAll(), zz = l.find(x => x.id === z.id);
+  if (zz) { zz.hits = (zz.hits || 0) + 1; zz.last = { t: Date.now(), what: `${head}: ${title}` }; zoneWrite(l); }
+  logAct(`감시 구역 ${head}`, `${z.name} · ${title}`);
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try { const no = new Notification(`Watchfloor · ${z.name}`, { body: `${head}: ${title}`, tag: z.id + title }); no.onclick = () => { focus(); onClick && onClick(); }; } catch {}
+  }
+}
+// minutes until a ship on its current course reaches the zone (≤12 h), or null
+function zoneEta(z, s) {
+  if (!(s.sog >= 1) || !isFinite(s.cog) || s.cog >= 360) return null;
+  for (let m = 5; m <= 720; m += 5) { const [la, lo] = deadReckon(s.lat, s.lng, s.sog, s.cog, m); if (zoneIn(z, la, lo)) return m; }
+  return null;
+}
+// entries are compared with the previous check; the first check of each kind only sets the baseline
+function zoneTrack(z, kind, items, keyOf, label, onEnter) {
+  const st = zoneState(z.id), now = new Set();
+  items.forEach(it => { if (zoneIn(z, it.lat, it.lng)) now.add(keyOf(it)); });
+  if (st.ready[kind]) items.forEach(it => { const k = keyOf(it); if (now.has(k) && !st[kind].has(k)) onEnter(it); });
+  st[kind] = now; st.ready[kind] = true;
+}
+function zoneTick() {
+  const zones = zoneAll().filter(z => z.on);
+  if (!zones.length) return;
+  for (const z of zones) {
+    const st = zoneState(z.id);
+    const live = shipPts.filter(s => !s.dark);
+    zoneTrack(z, 'ship', live, s => s.mmsi, null, s => zoneAlert(z, '선박 진입', s.name || 'MMSI ' + s.mmsi, `${SHIP_TYPE(s.shipType) || '선박'} · ${s.sog != null ? s.sog.toFixed(1) + ' kn' : ''}`, () => shipFocus(s)));
+    zoneTrack(z, 'ac', acPoints.filter(a => !a.ground), a => a.hex || a.flight, null, a => zoneAlert(z, '항공기 진입', a.flight || a.hex, `${a.type2 || ''} · ${Math.round(a.alt || 0).toLocaleString()}ft`, () => world.pointOfView({ lat: a.lat, lng: a.lng, altitude: 0.35 }, T(1200))));
+    // dark ships: inside the zone, or heading into it
+    for (const s of shipPts.filter(x => x.dark)) {
+      const k = s.mmsi + ':' + s.t;
+      if (zoneIn(z, s.lat, s.lng)) { if (!st.dark.has(k)) { st.dark.add(k); zoneAlert(z, '구역 안에서 신호 끊김', s.name || 'MMSI ' + s.mmsi, `${silentMin(s)}분째 · 최대 ${shipReach(s).km}km 이동 가능`, () => shipFocus(s)); } continue; }
+      const eta = zoneEta(z, s);
+      if (eta != null && !st.eta.has(k)) {
+        st.eta.add(k);
+        const left = eta - silentMin(s);
+        zoneAlert(z, '신호 끊긴 배가 구역 쪽으로', s.name || 'MMSI ' + s.mmsi, left <= 0 ? `침로대로라면 이미 구역에 들어갔을 수 있어요 (${eta}분 거리)` : `침로대로라면 약 ${left >= 60 ? Math.round(left / 6) / 10 + '시간' : left + '분'} 뒤 도착`, () => shipFocus(s));
+      }
+    }
+  }
+  if (!$('zoneBox')?.contains(document.activeElement)) renderZones();
+}
+function zoneCheckEvent(ev, raw) {
+  if (!raw || !raw.isNew || !isFinite(ev.lat)) return;
+  for (const z of zoneAll().filter(z => z.on)) {
+    const st = zoneState(z.id);
+    if (st.ev.has(ev.id) || !zoneIn(z, ev.lat, ev.lng)) continue;
+    st.ev.add(ev.id);
+    zoneAlert(z, '새 사건', ev.title, `${TYPE[ev.type]?.ko || ''} · 심각도 ${ev.severity}`, () => openEvent(EV.get(ev.id) || ev, true));
+    if (!$('zoneBox')?.contains(document.activeElement)) renderZones();
+  }
+}
+function zonePaths() {
+  return zoneAll().map(z => ({ pts: [...z.pts, z.pts[0]].map(p => [p[0], p[1], 0.006]), c: z.on ? 'rgba(240,180,60,0.95)' : 'rgba(240,180,60,0.35)', w: 0.7 }));
+}
+function zoneCounts(z) {
+  return {
+    ships: shipPts.filter(s => !s.dark && zoneIn(z, s.lat, s.lng)).length,
+    dark: shipPts.filter(s => s.dark && zoneIn(z, s.lat, s.lng)).length,
+    ac: acPoints.filter(a => zoneIn(z, a.lat, a.lng)).length,
+    ev: evList('all').filter(ev => zoneIn(z, ev.lat, ev.lng)).length,
+    near: shipPts.filter(s => !zoneIn(z, s.lat, s.lng) && (s.dark || Date.now() - s.t < 30 * 60000)).map(s => ({ s, eta: zoneEta(z, s) })).filter(x => x.eta != null && x.eta <= 180).sort((a, b) => a.eta - b.eta)
+  };
+}
+function zoneView(z) {
+  const la = z.pts.map(p => p[0]), lo = z.pts.map(p => p[1]);
+  const lat = (Math.min(...la) + Math.max(...la)) / 2, lng = (Math.min(...lo) + Math.max(...lo)) / 2;
+  const span = Math.max(Math.max(...la) - Math.min(...la), Math.max(...lo) - Math.min(...lo));
+  if (S.app === 'flat') { FL.lat = lat; FL.lng = lng; const { W } = flatSize(); FL.k = Math.max(W / 400, Math.min(400, W / Math.max(span * 1.6, 1))); drawFlat(); return; }
+  if (S.app !== 'map') setApp('map');
+  if (busy) { clearTimeout(resumeTimer); resume(); }
+  ctl.autoRotate = false; world.pointOfView({ lat, lng, altitude: Math.max(0.3, Math.min(2, span / 25)) }, T(1400));
+}
+function startZoneDraw() {
+  if (S.app !== 'flat') setApp('flat');
+  zoneDraw = true; FL.lasso = false; $('flatLasso')?.setAttribute('aria-pressed', 'false');
+  $('flatZone')?.setAttribute('aria-pressed', 'true');
+  $('flatCv').style.cursor = 'crosshair'; drawFlat();
+}
+function stopZoneDraw() { zoneDraw = false; $('flatZone')?.setAttribute('aria-pressed', 'false'); $('flatCv').style.cursor = 'grab'; drawFlat(); }
+function renderZones() {
+  const box = $('zoneBox'); if (!box) return;
+  const l = zoneAll();
+  box.innerHTML = `
+    <div class="fx-t inv-lh">감시 구역 <span>${l.length}</span></div>
+    <p class="note">평면 지도에 구역을 그려 두면 배·항공기·새 사건이 들어올 때와, 신호 끊긴 배가 그 안에 있거나 침로가 그쪽으로 향할 때 알려 줘요. 항공기는 항공 화면에서 불러온 범위만 봐요.</p>
+    <div class="inv-act"><button type="button" class="btn" id="zoneNew">평면 지도에서 구역 그리기</button></div>
+    <ul class="inv-list">${l.map(z => { const c = zoneCounts(z); return `<li><div class="al-r"><b>${esc(z.name)}</b><span>선박 ${c.ships}${c.dark ? ` · <b style="color:var(--crit)">신호 끊김 ${c.dark}</b>` : ''} · 항공기 ${c.ac} · 사건 ${c.ev}${c.near.length ? ` · 3시간 안 접근 ${c.near.length}척` : ''}</span><span>${z.hits ? `${z.hits}번 울림 · ${ago(z.last.t)}: ${esc(z.last.what)}` : '아직 울리지 않았어요'}</span></div><button type="button" class="inv-del zn-view" data-id="${esc(z.id)}">보기</button><button type="button" class="inv-del zn-tog" data-id="${esc(z.id)}" aria-pressed="${z.on}">${z.on ? '켜짐' : '꺼짐'}</button><button type="button" class="inv-del zn-del" data-id="${esc(z.id)}" aria-label="${esc(z.name)} 지우기">지우기</button></li>`; }).join('') || '<li class="none">감시 구역이 없어요.</li>'}</ul>`;
+  $('zoneNew').addEventListener('click', startZoneDraw);
+  box.querySelectorAll('.zn-view').forEach(b => b.addEventListener('click', () => { const z = zoneAll().find(x => x.id === b.dataset.id); if (z) zoneView(z); }));
+  box.querySelectorAll('.zn-tog').forEach(b => b.addEventListener('click', () => { const l2 = zoneAll(), z = l2.find(x => x.id === b.dataset.id); if (z) { z.on = !z.on; zoneWrite(l2); if (z.on) zoneSeen.delete(z.id); renderZones(); restorePaths(); drawFlatSoon(); zoneTick(); } }));
+  box.querySelectorAll('.zn-del').forEach(b => b.addEventListener('click', () => zoneDelete(b.dataset.id)));
+}
+
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
 function addQuake(q, live) {
@@ -3399,6 +3551,7 @@ function connectStream() {
     const ev = upsertEvent(raw);
     refreshSoon();
     alCheck(ev, raw);
+    zoneCheckEvent(ev, raw);
     const sig = ev.signals.find(s => s.id === raw.newSignal);
     if (!sig || sig.kind === 'eew') return;
     if (sig.kind === 'tsunami') { if (!viewRange) { busy && !paused ? cinemaQueue.push({ mk: 'ev', ev }) : openEvent(ev); } return; }
@@ -3419,6 +3572,7 @@ async function init() {
   renderFeed(); updateStats(); applyLayers();
   fetch('api/places').then(r => r.json()).then(j => buildPlaceIndex(j.places)).catch(() => buildPlaceIndex([]));
   if (layers.ships) setShips(true);
+  restorePaths();
   connectStream();
   return st;
 }
@@ -3472,6 +3626,7 @@ addEventListener('keydown', k => {
   else if (k.key === 'n' || k.key === 'N') nextSignificant();
   else if (k.key === 'j' || k.key === 'J') fireMissile();
   else if (k.key === 'e' || k.key === 'E') $('eewTest').click();
+  else if (k.key === 'Escape' && zoneDraw) stopZoneDraw();
   else if (k.key === 'Escape' && pickMode) stopPick();
   else if (k.key === 'Escape' && $('objForm')) $('objForm').remove();
   else if (k.key === 'Escape' && busy) { clearTimeout(resumeTimer); resume(); }
