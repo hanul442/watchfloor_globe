@@ -933,7 +933,7 @@ function clearFx() {
 function resume() {
   clearFx(); missileArcs = []; acPoints = []; applyLayers(); currentId = null; currentFocus = null; renderTimeline();
   world.pointOfView({ altitude: 2.3 }, T(2200));
-  setTimeout(() => { ctl.autoRotate = !reduce; busy = false; if (S.screen === 'disaster') world.pathsData(stormPaths); if (S.screen === 'air') loadAirArea(true); if (cinemaQueue.length && !paused) { const n = cinemaQueue.shift(); n.mk === 'ev' ? openEvent(n.ev) : n.type === 'tsunami' ? tsunamiFocus(n) : focusOn(n); } }, T(2300));
+  setTimeout(() => { ctl.autoRotate = !reduce; busy = false; restorePaths(); if (S.screen === 'air') loadAirArea(true); if (cinemaQueue.length && !paused) { const n = cinemaQueue.shift(); n.mk === 'ev' ? openEvent(n.ev) : n.type === 'tsunami' ? tsunamiFocus(n) : focusOn(n); } }, T(2300));
 }
 function showBanner(text, cls) {
   const b = document.createElement('div');
@@ -2038,7 +2038,7 @@ function setScreen(name) {
 
 function renderScreen() {
   const box = $('typePanel');
-  if (!S.screen) { box.hidden = true; world.pathsData(busy ? world.pathsData() : []); return; }
+  if (!S.screen) { box.hidden = true; restorePaths(); return; }
   const sc = SCREENS[S.screen];
   box.style.setProperty('--tc', sc.color);
   const body = S.screen === 'quake' ? quakeScreen() : S.screen === 'disaster' ? disasterScreen() : S.screen === 'air' ? airScreen() : newsScreen();
@@ -2047,7 +2047,7 @@ function renderScreen() {
   box.querySelectorAll('[data-ev]').forEach(n => n.addEventListener('click', () => { const ev = EV.get(n.dataset.ev); if (ev) openEvent(ev, true); }));
   box.querySelectorAll('[data-ac]').forEach(n => n.addEventListener('click', () => { const a = acPoints[+n.dataset.ac]; if (a) world.pointOfView({ lat: a.lat, lng: a.lng, altitude: 0.35 }, T(1200)); }));
   $('airReload')?.addEventListener('click', () => loadAirArea(true));
-  if (S.screen !== 'disaster' && !busy) world.pathsData([]);
+  if (S.screen !== 'disaster') restorePaths();
 }
 
 const kpi = list => `<div class="kpis">${list.map(([v, l, c]) => `<div><b${c ? ` style="color:${c}"` : ''}>${v}</b><span>${l}</span></div>`).join('')}</div>`;
@@ -2093,7 +2093,7 @@ function disasterScreen() {
   const storms = withCat.filter(x => x.d && x.d.cat === 'severeStorms');
   // draw storm tracks on the globe
   stormPaths = storms.filter(x => x.d.track && x.d.track.length > 1).map(x => ({ pts: x.d.track.map(p => [p[0], p[1], 0.006]), c: 'rgba(70,214,232,0.75)', w: 0.5 }));
-  if (!busy) world.pathsData(stormPaths);
+  restorePaths();
   const reported = evs.filter(ev => ev.signals.some(s => s.kind === 'news')).sort((a, b) => b.signals.length - a.signals.length).slice(0, 6);
   return kpi([[evs.length, '진행 중 재난'], [storms.length, '폭풍·태풍', storms.length ? '#46d6e8' : ''], [cats.wildfires || 0, '산불'], [cats.volcanoes || 0, '화산']]) +
     `<div class="sec"><div class="sec-h"><span>종류</span><b>NASA EONET + 보도</b></div>${bars(catRows)}</div>` +
@@ -2220,7 +2220,7 @@ function invApply(inv) {
   setRange(Array.isArray(inv.range) && inv.range.length === 2 ? inv.range : null);
   setApp(['map', 'graph', 'table'].includes(inv.app) ? inv.app : 'map');
   if (inv.pov && isFinite(inv.pov.lat)) { ctl.autoRotate = false; world.pointOfView(inv.pov, T(1500)); }
-  emit(); renderInv();
+  emit(); renderInv(); restorePaths();
   logAct('조사 열기', inv.name);
 }
 
@@ -2241,7 +2241,7 @@ function invNew() {
   FACETS.forEach(([k]) => S.filters[k].clear());
   S.sel.clear(); S.links = []; S.extra.clear(); S.notes.clear(); S.merges = []; refreshMerges();
   setRange(null);
-  emit(); renderInv();
+  emit(); renderInv(); restorePaths();
 }
 function invDelete(id) {
   const inv = invAll().find(x => x.id === id); if (!inv) return;
@@ -2351,6 +2351,10 @@ function renderInv() {
     <div class="fx-t inv-lh">이 브라우저에 저장한 조사 <span>${list.length}</span></div>
     <ul class="inv-list">${list.map(x => `<li${S.inv?.id === x.id ? ' class="cur"' : ''}><button type="button" class="inv-open" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><span>사건 ${x.events.length} · 연결 ${(x.links || []).length} · ${ago(x.updated)}</span></button><button type="button" class="inv-del" data-id="${esc(x.id)}" aria-label="${esc(x.name)} 지우기">지우기</button></li>`).join('') || '<li class="none">아직 저장한 조사가 없어요. 사건을 고르고(Shift+클릭) 검색 확장을 한 뒤 저장해 보세요.</li>'}</ul>
     <div class="inv-act"><button type="button" class="btn" id="invImport">파일에서 불러오기</button><input type="file" id="invFileIn" accept=".json,application/json" hidden></div>
+    <div class="fx-t inv-lh">파일 가져오기</div>
+    <p class="note">CSV(위도·경도 열), GeoJSON, KML의 위치를 내 객체로 가져와요. 공개된 장소와 시설만 다루고, 사람의 위치 기록은 가져오지 마세요.</p>
+    <ul class="wk-links">${[...new Set([...S.extra.values()].filter(x => x.src).map(x => x.src))].map(src => `<li><span>${esc(src)} · ${[...S.extra.values()].filter(x => x.src === src).length}개</span><button type="button" class="inv-del imp-rm" data-src="${esc(src)}">지우기</button></li>`).join('')}</ul>
+    <div class="inv-act"><button type="button" class="btn" id="impBtn">CSV · GeoJSON · KML 가져오기</button><input type="file" id="impIn" accept=".csv,.tsv,.geojson,.json,.kml" hidden></div>
     <div id="alBox"></div>
     <details class="inv-log"><summary class="fx-t">이 브라우저의 작업 기록</summary><ul>${actList().slice(0, 40).map(a => `<li><span class="st">${fmt(a.t, 'Asia/Seoul')}</span> ${esc(a.what)}${a.name ? ' · ' + esc(a.name) : ''}</li>`).join('') || '<li class="st">아직 기록이 없어요</li>'}</ul></details>
     <p class="note">조사는 이 브라우저에만 저장돼요. 다른 기기나 사람에게는 링크나 파일로 넘겨 주세요.</p>`;
@@ -2359,6 +2363,9 @@ function renderInv() {
   $('invFile').addEventListener('click', invExport);
   $('invNew').addEventListener('click', invNew);
   $('invReport').addEventListener('click', openReport);
+  $('impBtn').addEventListener('click', () => $('impIn').click());
+  $('impIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) importFile(f); });
+  box.querySelectorAll('.imp-rm').forEach(b => b.addEventListener('click', () => { if (confirm(`${b.dataset.src}에서 가져온 객체를 모두 지울까요?`)) removeImported(b.dataset.src); }));
   $('objAdd').addEventListener('click', () => { if (S.app !== 'map') setApp('map'); startPick(); });
   renderAlerts();
   $('invImport').addEventListener('click', () => $('invFileIn').click());
@@ -2592,7 +2599,8 @@ function deleteObj(id) {
 function openObj(x) {
   clearTimeout(resumeTimer); clearFx();
   busy = true; ctl.autoRotate = false; currentId = x.id; currentFocus = { type: 'obj', place: x.label, lat: x.lat, lng: x.lng };
-  flyTo(x, 0.7);
+  flyTo(x, x.shape ? 1.1 : 0.7);
+  if (x.shape) world.pathsData(objShapes());
   const [tl, tc] = OBJ_TYPES[x.ot] || OBJ_TYPES.place;
   const d = document.createElement('section');
   d.className = 'dossier ev'; d.style.setProperty('--tc', tc);
@@ -2725,6 +2733,127 @@ function appendWork(d, ev) {
   appendLinkEditor(d, ev.id);
   appendMerge(d, ev);
 }
+
+// ================= IMPORT (CSV · GeoJSON · KML) =================
+// Files become user objects in the open investigation. Points stay points; lines and
+// polygons keep their outline (drawn on the globe) and get a centre point.
+const IMP_MAX = 2000, SHAPE_MAX = 400;
+const OT_GUESS = t => /시설|facility|plant|port|항구|공항|airport|base/i.test(t || '') ? 'facility' : /area|zone|지역|구역/i.test(t || '') ? 'area' : /memo|note|메모/i.test(t || '') ? 'memo' : 'place';
+
+function parseCSV(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  const delim = (text.split('\n', 1)[0].match(/\t/g) || []).length > (text.split('\n', 1)[0].match(/,/g) || []).length ? '\t' : ',';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+function fromCSV(text) {
+  const rows = parseCSV(text.replace(/^﻿/, ''));
+  if (rows.length < 2) throw new Error('CSV에 머리글과 데이터 행이 있어야 해요.');
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const col = re => head.findIndex(h => re.test(h));
+  const iLat = col(/^(lat|latitude|위도|y)$/), iLng = col(/^(lon|lng|long|longitude|경도|x)$/);
+  if (iLat < 0 || iLng < 0) throw new Error('위도·경도 열을 찾지 못했어요. 머리글을 lat, lng (또는 위도, 경도)로 붙여 주세요.');
+  const iName = col(/^(name|title|label|이름|명칭|제목)$/), iNote = col(/^(description|desc|note|notes|메모|설명|비고)$/), iType = col(/^(type|kind|category|종류|분류)$/);
+  const out = []; let skipped = 0;
+  rows.slice(1).forEach((r, n) => {
+    const lat = parseFloat(r[iLat]), lng = parseFloat(r[iLng]);
+    if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) { skipped++; return; }
+    out.push({ label: (iName >= 0 && r[iName]?.trim()) || `행 ${n + 2}`, note: iNote >= 0 ? (r[iNote] || '').trim() : '', ot: OT_GUESS(iType >= 0 ? r[iType] : ''), lat, lng });
+  });
+  return { items: out, skipped };
+}
+function ringCentre(pts) { const s = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]); return [s[0] / pts.length, s[1] / pts.length]; }
+const thin = pts => pts.length <= SHAPE_MAX ? pts : pts.filter((_, i) => i % Math.ceil(pts.length / SHAPE_MAX) === 0);
+function shapeItem(label, note, ot, pts, closed) {
+  pts = pts.filter(p => isFinite(p[0]) && isFinite(p[1]));
+  if (!pts.length) return null;
+  const [lat, lng] = ringCentre(pts);
+  return { label, note, ot: closed ? 'area' : ot, lat, lng, shape: pts.length > 1 ? thin(pts).map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]) : null };
+}
+function fromGeoJSON(j) {
+  const feats = j.type === 'FeatureCollection' ? j.features : j.type === 'Feature' ? [j] : j.type ? [{ type: 'Feature', geometry: j, properties: {} }] : [];
+  if (!Array.isArray(feats)) throw new Error('GeoJSON 형식이 아니에요.');
+  const out = []; let skipped = 0;
+  feats.forEach((f, n) => {
+    const g = f?.geometry, p = f?.properties || {};
+    const label = String(p.name || p.title || p.label || p.이름 || `객체 ${n + 1}`), note = String(p.description || p.note || p.desc || p.설명 || ''), ot = OT_GUESS(p.type || p.kind || p.category);
+    if (!g) { skipped++; return; }
+    const ll = c => [c[1], c[0]];
+    const push = it => it ? out.push(it) : skipped++;
+    if (g.type === 'Point') push(shapeItem(label, note, ot, [ll(g.coordinates)], false));
+    else if (g.type === 'MultiPoint') g.coordinates.forEach((c, i) => push(shapeItem(`${label} ${i + 1}`, note, ot, [ll(c)], false)));
+    else if (g.type === 'LineString') push(shapeItem(label, note, ot, g.coordinates.map(ll), false));
+    else if (g.type === 'MultiLineString') g.coordinates.forEach(c => push(shapeItem(label, note, ot, c.map(ll), false)));
+    else if (g.type === 'Polygon') push(shapeItem(label, note, ot, (g.coordinates[0] || []).map(ll), true));
+    else if (g.type === 'MultiPolygon') g.coordinates.forEach(c => push(shapeItem(label, note, ot, (c[0] || []).map(ll), true)));
+    else skipped++;
+  });
+  return { items: out, skipped };
+}
+function fromKML(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('KML 파일을 읽지 못했어요.');
+  const out = []; let skipped = 0;
+  const coords = s => (s || '').trim().split(/\s+/).map(t => t.split(',').map(Number)).filter(c => c.length >= 2).map(c => [c[1], c[0]]);
+  [...doc.getElementsByTagName('Placemark')].forEach((pm, n) => {
+    const tx = tag => pm.getElementsByTagName(tag)[0]?.textContent?.trim() || '';
+    const label = tx('name') || `객체 ${n + 1}`, note = tx('description').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1000);
+    const pt = pm.getElementsByTagName('Point')[0], ln = pm.getElementsByTagName('LineString')[0], pg = pm.getElementsByTagName('Polygon')[0];
+    const it = pt ? shapeItem(label, note, 'place', coords(pt.getElementsByTagName('coordinates')[0]?.textContent), false)
+      : ln ? shapeItem(label, note, 'place', coords(ln.getElementsByTagName('coordinates')[0]?.textContent), false)
+      : pg ? shapeItem(label, note, 'area', coords(pg.getElementsByTagName('coordinates')[0]?.textContent), true) : null;
+    it ? out.push(it) : skipped++;
+  });
+  return { items: out, skipped };
+}
+function parseImport(name, text) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (ext === 'csv' || ext === 'tsv' || ext === 'txt') return fromCSV(text);
+  if (ext === 'kml') return fromKML(text);
+  if (ext === 'geojson' || ext === 'json') {
+    let j; try { j = JSON.parse(text); } catch { throw new Error('JSON을 읽지 못했어요.'); }
+    if (j && j.v === 1 && Array.isArray(j.sel)) throw new Error('이 파일은 조사 파일이에요. 위의 "파일에서 불러오기"를 쓰세요.');
+    return fromGeoJSON(j);
+  }
+  throw new Error('CSV, GeoJSON, KML 파일만 가져올 수 있어요.');
+}
+async function importFile(file) {
+  try {
+    if (file.size > 15 * 1024 * 1024) throw new Error('15MB보다 큰 파일은 가져올 수 없어요.');
+    const { items, skipped } = parseImport(file.name, await file.text());
+    if (!items.length) throw new Error('위치가 있는 항목을 찾지 못했어요.');
+    const use = items.slice(0, IMP_MAX), t = Date.now().toString(36);
+    use.forEach((it, i) => {
+      const id = `obj-${t}-${i}`;
+      S.extra.set(id, { id, k: 'obj', user: true, src: file.name, ot: it.ot, label: String(it.label).slice(0, 60), note: String(it.note || '').slice(0, 1000), lat: it.lat, lng: it.lng, ...(it.shape ? { shape: it.shape } : {}), created: Date.now() });
+    });
+    emit(); restorePaths();
+    const lat = use.reduce((s, x) => s + x.lat, 0) / use.length, lng = use.reduce((s, x) => s + x.lng, 0) / use.length;
+    if (S.app !== 'map') setApp('map');
+    if (busy) { clearTimeout(resumeTimer); resume(); }
+    ctl.autoRotate = false; world.pointOfView({ lat, lng, altitude: use.length > 1 ? 1.2 : 0.6 }, T(1500));
+    invMsg(`${file.name}에서 ${use.length}개를 가져왔어요${skipped ? ` · 위치가 없어 건너뛴 항목 ${skipped}개` : ''}${items.length > IMP_MAX ? ` · ${IMP_MAX}개까지만 가져왔어요` : ''}. 조사를 저장하면 보관돼요.`);
+    renderInvSoon();
+    logAct('파일 가져오기', `${file.name} · ${use.length}개`);
+  } catch (e) { invMsg(e.message || '파일을 가져오지 못했어요.', true); }
+}
+function removeImported(src) {
+  [...S.extra.values()].filter(x => x.src === src).forEach(x => { S.extra.delete(x.id); S.links = S.links.filter(l => l.a !== x.id && l.b !== x.id); });
+  emit(); restorePaths(); renderInv();
+  logAct('가져온 파일 지우기', src);
+}
+function renderInvSoon() { const m = $('invMsg')?.textContent, bad = $('invMsg')?.classList.contains('bad'); renderInv(); if (m) invMsg(m, bad); }
+// outlines of imported lines and areas, plus storm tracks on the disaster screen
+function objShapes() { return [...S.extra.values()].filter(x => x.shape).map(x => ({ pts: x.shape.map(p => [p[0], p[1], 0.005]), c: rgba((OBJ_TYPES[x.ot] || OBJ_TYPES.place)[1], 0.8), w: 0.35 })); }
+function restorePaths() { if (!busy) world.pathsData([...(S.screen === 'disaster' ? stormPaths : []), ...objShapes()]); }
 
 // ================= LIVE DATA =================
 function normalizeQuake(q) { return { ...q, type: 'quake', time: +q.time }; }
